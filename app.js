@@ -1,5 +1,9 @@
-const WA='5521974424777', PHONE='+55 21 97442-4777', IG='bonely.store', OWNER='Gabriele', EMAIL='', HOURS='Seg. à Sáb. 09h às 18h';
-const BEN=[['shield','Loja 100% segura','selo SSL de segurança'],['map','Entregamos','em todo o Brasil'],['card','Parcele suas compras','em até 12x'],['truck','Entrega rápida','receba seu produto em poucos dias']];
+const SEC=window.SECTION||'loja';
+const WA='5521974424777', PHONE='+55 21 97442-4777', IG='bonely.store', OWNER='Gabriely', OWNER_FULL='Gabriely Bonfim', EMAIL='', HOURS='Seg. à Sáb. 09h às 18h';
+const IMP=SEC==='importados';
+const CK=IMP?'cartImp':'cart';
+const CIDADES=['Salto do Lontra','Dois Vizinhos (UTFPR)','Enéas Marques','Nova Esperança do Sudoeste','Francisco Beltrão'];
+const BEN=[['shield','Loja 100% segura','selo SSL de segurança'],['map',IMP?'Entrega regional':'Entregamos',IMP?'ou retirada, você escolhe':'em todo o Brasil'],['card','Parcele suas compras','em até 12x'],['truck',IMP?'Frete na entrega':'Entrega rápida',IMP?'valor combinado na hora':'receba seu produto em poucos dias']];
 const STATUS=['Aguardando pagamento','Pago','Separando','Enviado','Entregue','Cancelado'];
 const K='bonely_preview_v2';
 const demo=()=>({
@@ -15,11 +19,14 @@ const demo=()=>({
  orders:[],moves:[],customer:null,cart:[],seq:1000});
 let S; try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
 if(!S)S=demo();
+function CART(){return S[CK]||(S[CK]=[])}
+/* migra importados que ficaram no carrinho antigo (misturado) para o carrinho próprio */
+try{if(!S.cartImp)S.cartImp=[];const mv=(S.cart||[]).filter(i=>{const p=S.products.find(x=>x.id==i.key);return p&&p.type==='avulso'});if(mv.length){S.cartImp.push(...mv);S.cart=S.cart.filter(i=>!mv.includes(i));localStorage.setItem(K,JSON.stringify(S))}}catch(e){}
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
 const $=s=>document.querySelector(s);
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='';
+let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='',pid=null,shareId=null,asp=null,asn='',asw='',aq='',ofil='Todos',vper='14d',cbSel=[],cbName='',cbPrice='',newQ=[],cdraft={},aarea=null,apick=false,aedit=null;
 
 /* Camada de dados: hoje usa localStorage (prévia). No projeto real, cada save() vira gravação no Firestore. */
 
@@ -27,9 +34,9 @@ function freteDemo(c){const d=Math.abs(+c[0]-8);return [{name:'PAC (exemplo)',pr
 async function calcFrete(cep){
  const c=String(cep).replace(/\D/g,'');
  if(c.length!==8)return null;
- const qty=S.cart.reduce((a,i)=>a+i.qty,0)||1;
+ const qty=CART().reduce((a,i)=>a+i.qty,0)||1;
  try{
-  const r=await fetch('/api/frete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cep:c,items:[{qty}],value:S.cart.length?cartSub():0})});
+  const r=await fetch('/api/frete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cep:c,items:[{qty}],value:CART().length?cartSub():0})});
   if(r.status===404||r.status===405)return freteDemo(c);
   if(!r.ok)return 'erro';
   const d=await r.json();
@@ -46,40 +53,54 @@ function stockOf(key){
 }
 function addCart(key){
  const sel=$('#sz'+key),size=sel?sel.value:'';
- const ex=S.cart.find(i=>i.key==key&&i.size==size);
+ const ex=CART().find(i=>i.key==key&&i.size==size);
  const q=(ex?ex.qty:0)+1;
  if(q>stockOf(key)){alert('Sem estoque suficiente.');return}
- ex?ex.qty++:S.cart.push({key,size,qty:1});
+ ex?ex.qty++:CART().push({key,size,qty:1});
  save();cartOpen=true;render();
 }
-const cartSub=()=>S.cart.reduce((a,i)=>a+item(i.key).price*i.qty,0);
+const cartSub=()=>CART().reduce((a,i)=>a+item(i.key).price*i.qty,0);
 function setShip(i){ship.sel=i;render()}
+function keepDraft(){const g=id=>$(id)?$(id).value:'';cdraft={name:g('#cn'),phone:g('#cp'),email:g('#ce'),addr:g('#ca')};for(const k in cdraft)if(!cdraft[k])delete cdraft[k]}
+function setCity(v){if(!ship||!ship.other)return;ship.city=v;const t=v.trim();ship.opts[0].name=t?'Entrega em '+t+' (valor combinado na entrega)':'Entrega (cidade a informar, valor combinado na entrega)'}
+function setLocal(v){keepDraft();
+ if(!v){ship=null}
+ else if(v==='retirada'){ship={local:1,mode:'retirada',opts:[{name:'Retirada na loja',price:0,days:0,local:1}],sel:0}}
+ else if(v==='__outra'){ship={local:1,mode:'entrega',other:1,city:'',opts:[{name:'Entrega (cidade a informar, valor combinado na entrega)',price:0,days:0,local:1}],sel:0}}
+ else{ship={local:1,mode:'entrega',city:v,opts:[{name:'Entrega em '+v+' (valor combinado na entrega)',price:0,days:0,local:1}],sel:0}}
+ render()}
 async function doCep(){const v=$('#cep').value;ship={loading:1,cep:v};render();const f=await calcFrete(v);ship=f==='erro'?{fail:1,cep:v}:f?{cep:v,opts:f,sel:0}:{err:1};render()}
-function rm(i){S.cart.splice(i,1);save();render()}
+function rm(i){CART().splice(i,1);save();render()}
 
 function checkout(){
- const g=id=>$(id).value.trim();
+ const g=id=>($(id)?$(id).value:'').trim();
  const c={name:g('#cn'),phone:g('#cp'),email:g('#ce').toLowerCase(),addr:g('#ca')};
- if(!S.cart.length)return alert('Carrinho vazio.');
- if(!c.name||!c.phone||!c.email||!c.addr)return alert('Preencha nome, WhatsApp, e-mail e endereço.');
+ if(!CART().length)return alert('Carrinho vazio.');
+ const retira=IMP&&ship&&ship.mode==='retirada';
+ if(IMP&&(!ship||!ship.opts))return alert('Escolha retirada ou a cidade de entrega.');
+ if(IMP&&ship.other&&!String(ship.city||'').trim())return alert('Informe o nome da cidade de entrega.');
+ if(IMP&&ship.other)ship.city=ship.city.trim();
+ if(retira)c.addr='Retirada na loja';
+ else if(IMP&&ship.city&&c.addr)c.addr=c.addr+' - '+ship.city;
+ if(!c.name||!c.phone||!c.email||!c.addr)return alert(retira?'Preencha nome, WhatsApp e e-mail.':'Preencha nome, WhatsApp, e-mail e endereço.');
  if(!ship||!ship.opts)return alert('Calcule o frete pelo CEP.');
  const sh=ship.opts[ship.sel];
- const items=S.cart.map(i=>({key:i.key,name:item(i.key).name,price:item(i.key).price,qty:i.qty,size:i.size}));
+ const items=CART().map(i=>({key:i.key,name:item(i.key).name,price:item(i.key).price,qty:i.qty,size:i.size}));
  const sub=cartSub();
- const o={id:'BN'+(++S.seq),date:new Date().toLocaleString('pt-BR'),customer:{...c,cep:ship.cep},items,subtotal:sub,ship:sh,total:sub+sh.price,pay:$('#cpay').value,status:STATUS[0],tracking:'',stockDone:false};
- S.orders.unshift(o);saveCustomer(c);S.cart=[];ship=null;cartOpen=false;save();
- const wm=`Olá, ${OWNER}! O pedido *${o.id}* foi realizado.\n\nCliente: ${c.name}\n`+items.map(i=>`• ${i.qty}x ${i.name}${i.size?' ('+i.size+')':''} - ${money(i.price*i.qty)}`).join('\n')+`\n\nFrete ${sh.name}: ${money(sh.price)}\n*Total: ${money(o.total)}*\nForma de pagamento: ${o.pay}\n\nEntrega: ${c.addr} (CEP ${o.customer.cep})`;
+ const o={id:'BN'+(++S.seq),date:new Date().toLocaleString('pt-BR'),ts:Date.now(),customer:{...c,cep:ship.local?'':ship.cep},items,subtotal:sub,ship:sh,total:sub+sh.price,pay:$('#cpay').value,status:STATUS[0],tracking:'',stockDone:false,area:IMP?'importados':'moda'};
+ S.orders.unshift(o);saveCustomer(c);S[CK]=[];ship=null;cdraft={};cartOpen=false;save();
+ const wm=`Olá, ${OWNER}! O pedido *${o.id}* foi realizado.\n\nCliente: ${c.name}\n`+items.map(i=>`• ${i.qty}x ${i.name}${i.size?' ('+i.size+')':''} - ${money(i.price*i.qty)}`).join('\n')+`\n\n${sh.local?(retira?'*Retirada na loja*':'*'+sh.name+'*\nO valor da entrega é calculado na hora da entrega.'):'Frete '+sh.name+': '+money(sh.price)}\n*Total: ${money(o.total)}*${sh.local?' (sem frete)':''}\nForma de pagamento: ${o.pay}\n\n${retira?'Retirada: combinar com a loja':'Entrega: '+c.addr+(o.customer.cep?' (CEP '+o.customer.cep+')':'')}`;
  const txt=encodeURIComponent(wm);
  view='conta';render();
  window.open(`https://wa.me/${WA}?text=${txt}`,'_blank');
 }
 
 /* Admin */
-function setStatus(id,st){
+function _setStatus(id,st){
  const o=S.orders.find(x=>x.id===id);o.status=st;
  if(st==='Pago'&&!o.stockDone){
   o.items.forEach(i=>{const ps=String(i.key).startsWith('c')?item(i.key)?.combo.items.map(x=>S.products.find(p=>p.id==x)):[S.products.find(p=>p.id==i.key)];
-   (ps||[]).forEach(p=>{if(p){p.stock=Math.max(0,p.stock-i.qty);S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:'saida',qty:i.qty,note:'Pedido '+id})}})});
+   (ps||[]).forEach(p=>{if(p){p.stock=Math.max(0,p.stock-i.qty);S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:'saida',qty:i.qty,note:'Pedido '+id,area:isImpP(p)?'importados':'moda'})}})});
   o.stockDone=true;
  }
  save();render();
@@ -90,26 +111,33 @@ function readImg(file,cb){
 }
 let newImg='';
 function pickImg(e){if(e.files[0])readImg(e.files[0],d=>{newImg=d;$('#imgok').textContent='Foto carregada ✓'})}
+function editProd(id){aedit=id;newImg='';render();scrollTo(0,0)}
+function cancelEdit(){aedit=null;newImg='';render()}
 function addProd(){
  const n=$('#pn').value.trim(),pr=parseFloat($('#pp').value);
  if(!n||isNaN(pr))return alert('Informe nome e preço.');
- S.products.push({id:Date.now(),name:n,price:pr,type:$('#pt').value,gen:$('#pg').value,coll:$('#pc').value.trim(),sizes:$('#ps').value.trim()||'Único',stock:parseInt($('#pq').value)||0,img:newImg});
- const c=$('#pc').value.trim();if(c&&!S.colls.includes(c))S.colls.push(c);
- if(parseInt($('#pq').value)>0)S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:n,type:'entrada',qty:parseInt($('#pq').value),note:'Cadastro inicial'});
+ const v=id=>$(id)?$(id).value.trim():'';
+ const d={name:n,price:pr,gen:$('#pg')?$('#pg').value:'',coll:v('#pc'),sizes:v('#ps')||'Único',brand:v('#pm'),desc:v('#pd'),specs:v('#px')};
+ if(d.coll&&!S.colls.includes(d.coll))S.colls.push(d.coll);
+ if(aedit){const p=S.products.find(x=>x.id==aedit);if(p){Object.assign(p,d);if(newImg)p.img=newImg}aedit=null;newImg='';save();render();return}
+ const q=parseInt(v('#pq'))||0;
+ S.products.push({id:Date.now(),type:$('#pt').value,...d,stock:q,img:newImg});
+ if(q>0)S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:n,type:'entrada',qty:q,note:'Cadastro inicial',area:aarea});
  newImg='';save();render();
 }
-function delProd(id){if(confirm('Excluir produto?')){S.products=S.products.filter(p=>p.id!==id);save();render()}}
+function delProd(id){if(confirm('Excluir produto?')){if(aedit===id)aedit=null;S.products=S.products.filter(p=>p.id!==id);save();render()}}
 function addMove(){
  const p=S.products.find(x=>x.id==$('#mp').value),q=parseInt($('#mq').value),t=$('#mt').value;
  if(!p||!q||q<1)return alert('Escolha produto e quantidade.');
  if(t==='saida'&&q>p.stock)return alert('Saída maior que o estoque.');
  p.stock+=t==='entrada'?q:-q;
- S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:t,qty:q,note:$('#mn').value||''});save();render();
+ S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:t,qty:q,note:$('#mn').value||'',area:isImpP(p)?'importados':'moda'});save();render();
 }
 function addCombo(){
- const ids=[...document.querySelectorAll('.cb:checked')].map(x=>+x.value),n=$('#cbn').value.trim(),pr=parseFloat($('#cbp').value);
- if(!n||isNaN(pr)||ids.length<2)return alert('Nome, preço e ao menos 2 produtos.');
- S.combos.push({id:Date.now(),name:n,price:pr,items:ids});save();render();
+ const n=cbName.trim(),pr=parseFloat(cbPrice);
+ if(!n||isNaN(pr)||cbSel.length<2)return alert('Informe nome, preço e ao menos 2 produtos.');
+ S.combos.push({id:Date.now(),name:n,price:pr,items:[...cbSel]});
+ cbName='';cbPrice='';cbSel=[];aq='';save();render();
 }
 function delCombo(id){S.combos=S.combos.filter(c=>c.id!==id);save();render()}
 function saveCustomer(c){
@@ -148,24 +176,91 @@ function vRastreio(){
  <div class="row"><input id="rc" placeholder="Ex.: AA123456789BR" aria-label="Código de rastreio"><button class="btn ghost" onclick="const c=$('#rc').value.trim();if(c)window.open('https://www.melhorrastreio.com.br/rastreio/'+encodeURIComponent(c),'_blank')">Rastrear</button></div></div></section>`;
 }
 function match(p){
- if(collF&&p.coll!==collF)return false;
  if(q&&!p.name.toLowerCase().includes(q.toLowerCase()))return false;
+ if(SEC==='importados')return p.type==='avulso';
+ if(p.type==='avulso')return false;
+ if(collF&&p.coll!==collF)return false;
  if(filter==='tudo')return true;
- if(filter==='avulso')return p.type==='avulso';
  const g=p.gen||'Unissex';
- return p.type==='roupa'&&(g===filter||g==='Unissex');
+ return g===filter||g==='Unissex';
 }
-function cat(f,col){pg='cat';filter=f;collF=col||'';view='loja';cartOpen=false;menu=false;render();setTimeout(()=>{const e=document.getElementById('cat');if(e)e.scrollIntoView({behavior:'smooth'})},30)}
+function cat(f,col){if(SEC==='importados'&&(f==='Feminino'||f==='Masculino'||col)){location.href='index.html?'+new URLSearchParams({v:'loja',f:f,c:col||'',g:'cat'});return}
+ clearUrl();pg='cat';filter=f;collF=col||'';view='loja';cartOpen=false;menu=false;render();setTimeout(()=>{const e=document.getElementById('cat');if(e)e.scrollIntoView({behavior:'smooth'})},30)}
 function goto(id){pg=id;view='loja';cartOpen=false;menu=false;render();setTimeout(()=>{const e=document.getElementById(id);if(e)e.scrollIntoView({behavior:'smooth'})},30)}
 function doSearch(e){e.preventDefault();q=$('#q').value.trim();cat('tudo')}
 function vMenu(){
+ const imp=SEC==='importados';
  return `<div class="scrim ${menu?'show':''}" onclick="menu=false;render()"></div><div class="drawer left ${menu?'open':''}" role="dialog" aria-label="Menu"><div class="line" style="border:0"><h2 style="margin:0">Menu</h2><button class="btn sm ghost" onclick="menu=false;render()">Fechar</button></div>
- <button class="mlk" onclick="q='';cat('tudo')">Todos os produtos</button><button class="mlk" onclick="q='';cat('Feminino')">Feminino</button><button class="mlk" onclick="q='';cat('Masculino')">Masculino</button><button class="mlk" onclick="q='';cat('avulso')">Avulsos</button>
- ${S.colls.length?'<h3 style="margin:18px 0 4px;color:var(--gold)">Coleções</h3>'+S.colls.map((c,i)=>`<button class="mlk" onclick="q='';cat('tudo',S.colls[${i}])">${esc(c)}</button>`).join(''):''}
- ${S.combos.length?'<button class="mlk" onclick="goto(\'combos\')">Combos</button>':''}
- <h3 style="margin:18px 0 4px;color:var(--gold)">Sua conta</h3><button class="mlk" onclick="go('conta')">Minha conta</button><button class="mlk" onclick="go('rastreio')">Rastrear pedido</button><button class="mlk" onclick="menu=false;modal='frete';render()">Simular frete</button></div>`;
+ ${imp?`<button class="mlk" onclick="q='';cat('tudo')">Todos os importados</button><a class="mlk" href="index.html">Moda feminina e masculina</a>`:`<button class="mlk" onclick="q='';cat('tudo')">Todos os produtos</button><button class="mlk" onclick="q='';cat('Feminino')">Feminino</button><button class="mlk" onclick="q='';cat('Masculino')">Masculino</button><a class="mlk" href="importados.html">Importados</a>`}
+ ${!imp&&S.colls.length?'<h3 style="margin:18px 0 4px;color:var(--gold)">Coleções</h3>'+S.colls.map((c,i)=>`<button class="mlk" onclick="q='';cat('tudo',S.colls[${i}])">${esc(c)}</button>`).join(''):''}
+ ${!imp&&S.combos.length?'<button class="mlk" onclick="goto(\'combos\')">Combos</button>':''}
+ <h3 style="margin:18px 0 4px;color:var(--gold)">Sua conta</h3><button class="mlk" onclick="go('conta')">Minha conta</button><button class="mlk" onclick="go('rastreio')">Rastrear pedido</button>${IMP?'':`<button class="mlk" onclick="menu=false;modal='frete';render()">Simular frete</button>`}</div>`;
 }
 function vDoc(){const t=document.getElementById('doc');return `<section><div class="wrap doc" style="padding-top:0;padding-bottom:0">${t?t.innerHTML:''}</div></section>`}
+function clearUrl(){try{if(window.STATIC_PAGE)return;if(/\/produto\//.test(location.pathname))history.replaceState(null,'','/'+(SEC==='importados'?'importados.html':'index.html'));else if(location.search)history.replaceState(null,'',location.pathname)}catch(e){}}
+function slug(t){return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
+function prodPath(p){return (p.type==='avulso'?'/importados/produto/':'/produto/')+slug(p.name)+'-'+p.id}
+function prodUrl(p){
+ if(/^https?:/.test(location.protocol||'')&&location.origin)return location.origin+prodPath(p);
+ let d=location.href.split('#')[0].split('?')[0];
+ d=d.slice(0,d.lastIndexOf('/')+1);
+ return d+(p.type==='avulso'?'importados.html':'index.html')+'?p='+p.id;
+}
+const fmtWA=t=>esc(t).replace(/\*(.+?)\*/g,'<b>$1</b>');
+const pcard=p=>`<div class="pcard">${ph(p)}<div><b>${esc(p.name)}</b><div class="price">${money(p.price)}</div><div class="tag">Bonely Store${p.type==='avulso'?' · Importados':''}</div></div></div>`;
+function shareMsg(p,name,loja){
+ const u=prodUrl(p),pr=`*${p.name}*\n${money(p.price)}`;
+ return loja?`Olá${name?', '+name:''}! 💛\nO produto que você deseja está disponível em nosso site ✨\n\n${pr}\n\nVeja aqui 👇\n${u}\n\nBonely Store`
+  :`${name?'Oi, '+name+'! 💛\n':''}Olha o que eu achei na Bonely Store ✨\n\n${pr}\n\nVeja aqui 👇\n${u}`;
+}
+function copyText(t,ok){
+ if(typeof navigator!=='undefined'&&navigator.clipboard)navigator.clipboard.writeText(t).then(ok,()=>{window.prompt('Copie o link:',t);ok()});
+ else{window.prompt('Copie o link:',t);ok()}
+}
+function openProd(id){pid=id;view='produto';cartOpen=false;menu=false;try{const pp=S.products.find(x=>x.id==id);history.replaceState(null,'',pp&&/^https?:/.test(location.protocol||'')?prodPath(pp):'?p='+id)}catch(e){}render();scrollTo(0,0)}
+function openShare(id){shareId=id;modal='share';render()}
+function waShare(){const p=S.products.find(x=>x.id==shareId);window.open('https://wa.me/?text='+encodeURIComponent(shareMsg(p,$('#shn').value.trim())),'_blank')}
+function copyLink(el,id){const p=S.products.find(x=>x.id==id);copyText(prodUrl(p),()=>{el.textContent='Link copiado ✓'})}
+async function nativeShare(){const p=S.products.find(x=>x.id==shareId);try{await navigator.share({title:p.name,text:'Olha o que eu achei na Bonely Store: '+p.name+' por '+money(p.price),url:prodUrl(p)})}catch(e){}}
+function curShareProd(){const l=AP().filter(aMatch);return l.find(x=>x.id==asp)||l[0]}
+function adminShare(ch){
+ const p=curShareProd();if(!p)return alert('Escolha um produto.');
+ const n=asn.trim(),w=asw.replace(/\D/g,'');
+ S.shares=S.shares||[];
+ S.shares.unshift({area:isImpP(p)?'importados':'moda',date:new Date().toLocaleString('pt-BR'),name:p.name,to:[n,asw.trim()].filter(Boolean).join(' · '),ch});save();
+ if(ch==='wa'){const num=w?(w.length<=11?'55'+w:w):'';window.open('https://wa.me/'+num+'?text='+encodeURIComponent(shareMsg(p,n,1)),'_blank');render()}
+ else copyText(prodUrl(p),render);
+}
+function vShare(){
+ const p=S.products.find(x=>x.id==shareId);if(!p)return '';
+ return `<div class="modal" onclick="if(event.target===this){modal='';render()}"><div role="dialog" aria-label="Compartilhar produto" style="width:min(460px,100%)"><h2>Compartilhar</h2><p class="sub">Envie esta peça para um amigo ou alguém da família.</p>
+ ${pcard(p)}
+ <label>Nome de quem vai receber (opcional)</label><input id="shn" placeholder="Ex.: Maria">
+ <div class="linkbox">${IC.share}<span>${esc(prodUrl(p).replace(/^https?:\/\//,''))}</span></div>
+ <div class="row"><button class="btn" onclick="waShare()">Enviar pelo WhatsApp</button><button class="btn ghost" onclick="copyLink(this,${p.id})">Copiar link</button>${typeof navigator!=='undefined'&&navigator.share?`<button class="btn ghost" onclick="nativeShare()">Mais opções</button>`:''}</div>
+ <div class="row"><button class="btn sm ghost" onclick="modal='';render()">Fechar</button></div></div></div>`;
+}
+function specsHtml(p){const L=String(p.specs||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);if(!L.length)return '';return `<ul class="pspec">${L.map(x=>{const i=x.indexOf(':');return i>0?`<li><span>${esc(x.slice(0,i).trim())}</span><b>${esc(x.slice(i+1).trim())}</b></li>`:`<li><b>${esc(x)}</b></li>`}).join('')}</ul>`}
+function vProduto(){
+ const p=S.products.find(x=>x.id==pid);
+ if(!p)return `<section><div class="wrap"><h2>Produto não encontrado</h2><p class="sub">Esse link pode estar desatualizado.</p><button class="btn" onclick="go('loja')">Ver catálogo</button></div></section>`;
+ const imp=p.type==='avulso';
+ return `<section><div class="wrap"><p><button class="lk inl" onclick="go('loja')">← Voltar ao catálogo</button></p>
+ <div class="pdp"><div class="card">${ph(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${money(p.price)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
+ ${p.stock>0?`<label>Tamanho</label><select id="sz${p.id}">${p.sizes.split(',').map(x=>`<option>${esc(x.trim())}</option>`).join('')}</select>${p.stock<=3?`<div class="tag">Restam ${p.stock}</div>`:''}<div class="row"><button class="btn" onclick="addCart(${p.id})">Adicionar ao carrinho</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`:`<div class="tag err">Esgotado</div><div class="row"><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`}</div></div></div></section>`;
+}
+function updPrev(){const p=curShareProd(),e=$('#amsg');if(p&&e)e.innerHTML=fmtWA(shareMsg(p,asn.trim(),1))}
+function vShareAdmin(){
+ if(!AP().length)return '<div class="empty">Cadastre um produto primeiro.</div>';
+ const list=AP().filter(aMatch),p=curShareProd(),log=(S.shares||[]).filter(l=>(l.area||(isImpP(S.products.find(x=>x.name===l.name))?'importados':'moda'))===aarea);
+ return `<div class="two"><div><h3>Enviar produto para um cliente</h3>${aSearch('Buscar produto pelo nome')}<label>Produto</label>${p?`<select onchange="asp=this.value;render()" aria-label="Produto">${list.map(x=>`<option value="${x.id}" ${x.id==p.id?'selected':''}>${esc(x.name)}${x.type==='avulso'?' (importado)':''}</option>`).join('')}</select>`:'<div class="empty">Nenhum produto encontrado.</div>'}
+ <label>Nome do cliente (opcional)</label><input value="${esc(asn)}" oninput="asn=this.value;updPrev()" placeholder="Ex.: Ana">
+ <label>WhatsApp do cliente (opcional)</label><input value="${esc(asw)}" oninput="asw=this.value" inputmode="tel" placeholder="Ex.: 21 99999-9999">
+ ${p?`<label>Mensagem que será enviada</label>${pcard(p)}<div class="bubble" id="amsg">${fmtWA(shareMsg(p,asn.trim(),1))}</div>
+ <div class="row"><button class="btn" onclick="adminShare('wa')">Enviar pelo WhatsApp</button><button class="btn ghost" onclick="adminShare('copy')">Copiar link</button></div>`:''}
+ <p class="tag">Sem o WhatsApp do cliente, você escolhe o contato ao abrir o WhatsApp.</p></div>
+ <div class="scroll"><h3>Histórico de envios</h3>${log.length?`<table><tr><th>Data</th><th>Produto</th><th>Para</th><th>Canal</th></tr>${log.map(l=>`<tr><td>${l.date}</td><td>${esc(l.name)}</td><td>${esc(l.to||'-')}</td><td>${l.ch==='wa'?'WhatsApp':'Link copiado'}</td></tr>`).join('')}</table>`:'<div class="empty">Nenhum envio ainda.</div>'}</div></div>`;
+}
 async function calcF(){const v=$('#cepm').value;fs={cep:v,loading:1};render();const f=await calcFrete(v);fs={cep:v,opts:f==='erro'?null:f,fail:f==='erro'};render()}
 function vModal(){
  return `<div class="modal" onclick="if(event.target===this){modal='';render()}"><div role="dialog" aria-label="Simular frete" style="width:min(460px,100%)"><h2>Simular frete</h2><p class="sub">Informe o CEP para ver valor e prazo de entrega.</p>
@@ -180,45 +275,160 @@ const ph=p=>`<div class="ph">${p.img?`<img src="${p.img}" alt="${esc(p.name)}">`
 /* Views */
 function vLoja(){
  const list=S.products.filter(match);
- return `<section class="hero"><div class="wrap"><img class="herologo" src="IMGs/logo_img.jpeg" alt="Bonely Store"><p>Moda feminina, masculina e peças especiais, com envio para todo o Brasil.</p><div class="row" style="justify-content:center"><button class="btn" onclick="document.getElementById('cat').scrollIntoView({behavior:'smooth'})">Ver catálogo</button></div></div></section>
+ return `${SEC==='importados'?`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><h1 class="imp">IMPORTADOS</h1><p>Produtos importados selecionados pela Bonely Store, com entrega na região ou retirada.</p><div class="row" style="justify-content:center"><button class="btn" onclick="document.getElementById('cat').scrollIntoView({behavior:'smooth'})">Ver produtos</button><a class="btn ghost" style="text-decoration:none" href="index.html">Ir para a moda</a></div></div></section>`:`<section class="hero"><div class="wrap"><img class="herologo" src="IMGs/logo_img.jpeg" alt="Bonely Store"><p>Moda feminina, masculina e peças especiais, com envio para todo o Brasil.</p><div class="row" style="justify-content:center"><button class="btn" onclick="document.getElementById('cat').scrollIntoView({behavior:'smooth'})">Ver catálogo</button></div></div></section>`}
  <div class="benefits"><div class="wrap">${BEN.map(b=>`<div class="ben">${IC[b[0]]}<span><b>${b[1]}</b>${b[2]}</span></div>`).join('')}</div></div>
- <section id="cat"><div class="wrap"><h2>Catálogo</h2><p class="sub">${q?`Resultados para “${esc(q)}” <button class="btn sm ghost" onclick="q='';render()">Limpar busca</button>`:'Moda feminina, masculina e peças avulsas.'}</p>
- <div class="pills">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino'],['avulso','Avulsos']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';render()">${l}</button>`).join('')}</div>
- ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];render()">${esc(c)}</button>`).join('')}</div>`:''}
- ${list.length?`<div class="grid">${list.map(p=>`<div class="card">${ph(p)}<div class="in"><h3>${esc(p.name)}</h3><div class="tag">${[p.gen,p.coll||(p.type==='avulso'?'Avulso':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${money(p.price)}</div>
-  ${p.stock>0?`<div class="row"><select id="sz${p.id}" aria-label="Tamanho">${p.sizes.split(',').map(s=>`<option>${esc(s.trim())}</option>`).join('')}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${p.stock<=3?`<div class="tag">Restam ${p.stock}</div>`:''}`:'<div class="tag err">Esgotado</div>'}</div></div>`).join('')}</div>`:'<div class="empty">Nenhuma peça nesse filtro.</div>'}
+ <section id="cat"><div class="wrap"><h2>${SEC==='importados'?'Importados':'Catálogo'}</h2><p class="sub">${q?`Resultados para “${esc(q)}” <button class="btn sm ghost" onclick="q='';render()">Limpar busca</button>`:(SEC==='importados'?'Produtos importados selecionados.':'Moda feminina e masculina.')}</p>
+ ${SEC==='importados'?'':`<div class="pills">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';render()">${l}</button>`).join('')}<a href="importados.html">Importados ↗</a></div>
+ ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];render()">${esc(c)}</button>`).join('')}</div>`:''}`}
+ ${list.length?`<div class="grid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${money(p.price)}</div>
+  ${p.stock>0?`<div class="row"><select id="sz${p.id}" aria-label="Tamanho">${p.sizes.split(',').map(s=>`<option>${esc(s.trim())}</option>`).join('')}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${p.stock<=3?`<div class="tag">Restam ${p.stock}</div>`:''}`:'<div class="tag err">Esgotado</div>'}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
  </div></section>
- ${S.combos.length?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
+ ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
 }
 function vConta(){
  const c=S.customer;
  if(!c)return `<section><div class="wrap" style="max-width:420px"><h2>Minha conta</h2><p class="sub">Entre para acompanhar seus pedidos.</p><label>Nome</label><input id="ln"><label>E-mail</label><input id="le" type="email"><label>WhatsApp</label><input id="lp"><div class="row"><button class="btn" onclick="login()">Entrar</button></div></div></section>`;
- const os=S.orders.filter(o=>o.customer.email===c.email);
+ const os=S.orders.filter(o=>o.customer.email===c.email&&oArea(o)===(IMP?'importados':'moda'));
  return `<section><div class="wrap"><h2>Olá, ${esc(c.name)}</h2><p class="sub">${esc(c.email)} · <button class="btn sm ghost" onclick="S.customer=null;save();render()">Sair</button></p>
  <h3 style="margin:20px 0 8px">Meus pedidos</h3>${os.length?os.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id}</b><span class="st">${o.status}</span></div><div class="tag">${o.date}</div>${o.items.map(i=>`<div class="line"><span>${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}<div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
  ${steps(o)}${trackBlock(o)}</div>`).join(''):'<div class="empty">Você ainda não fez pedidos.</div>'}</div></section>`;
 }
+function orderProds(i){return String(i.key).startsWith('c')?(item(i.key)?item(i.key).combo.items.map(x=>S.products.find(p=>p.id==x)):[]):[S.products.find(p=>p.id==i.key)]}
+function setStatus(id,st){
+ const o=S.orders.find(x=>x.id===id);
+ if(st==='Cancelado'&&o.stockDone&&!o.sample){
+  o.items.forEach(i=>orderProds(i).forEach(p=>{if(p){p.stock+=i.qty;S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:'entrada',qty:i.qty,note:'Cancelamento '+id,area:isImpP(p)?'importados':'moda'})}}));
+  o.stockDone=false;
+ }
+ _setStatus(id,st);
+}
+/* Painel separado: Moda x Importados. Nada se mistura. */
+const AREAS={moda:{name:'Moda',desc:'Roupas femininas e masculinas, combos e coleções.'},importados:{name:'Importados',desc:'Produtos importados, entrega regional ou retirada.'}};
+const isImpP=p=>!!p&&p.type==='avulso';
+function oArea(o){return o.area||((o.items||[]).some(x=>!String(x.key).startsWith('c')&&isImpP(S.products.find(p=>p.id==x.key)))?'importados':'moda')}
+function mArea(m){return m.area||(isImpP(S.products.find(p=>p.name===m.name))?'importados':'moda')}
+const ordersOf=a=>S.orders.filter(o=>oArea(o)===a);
+const prodsOf=a=>S.products.filter(p=>(a==='importados')===isImpP(p));
+const AO=()=>ordersOf(aarea),AP=()=>prodsOf(aarea),AM=()=>S.moves.filter(m=>mArea(m)===aarea),AC=()=>aarea==='moda'?S.combos:[];
+const goalVal=()=>+((S.goals&&S.goals[aarea])||(aarea==='moda'?S.goal:0))||0;
+function setArea(a){aarea=a;apick=false;aedit=null;aq='';ofil='Todos';cbSel=[];if(a==='importados'&&atab==='combos')atab='produtos';render();scrollTo(0,0)}
+const AIC={moda:'<path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>',importados:'<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'};
+function vAreaModal(){
+ const card=a=>{const o=ordersOf(a),todo=o.filter(x=>x.status==='Pago'||x.status==='Separando').length,aw=o.filter(x=>x.status===STATUS[0]).length,n=prodsOf(a).length;
+  return `<button class="apc ${aarea===a?'cur':''}" onclick="setArea('${a}')"><span class="api"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AIC[a]}</svg></span><span class="apt2"><b>${AREAS[a].name}</b><small>${AREAS[a].desc}</small></span><span class="apb">${todo?`<span class="hot">${todo} para separar</span>`:''}${aw?`<span class="hot">${aw} aguardando pagamento</span>`:''}<span>${n} produto${n===1?'':'s'}</span></span>${aarea===a?'<span class="apcur">Atual</span>':''}</button>`};
+ return `<div class="modal" ${aarea?`onclick="if(event.target===this){apick=false;render()}"`:''}><div class="apd" role="dialog" aria-modal="true" aria-labelledby="apt"><div class="aph"><span class="spark">✦ ✧ ✦</span><h2 id="apt">${aarea?'Trocar de painel':'Olá, '+OWNER}</h2><p class="sub">${aarea?'Escolha qual painel você quer ver.':'Qual painel você quer abrir?'}</p></div><div class="apg">${card('moda')}${card('importados')}</div><div class="apf">${aarea?'<button class="btn sm ghost" onclick="apick=false;render()">Cancelar</button>':'<button class="btn sm ghost" onclick="go(\'loja\')">Voltar para a loja</button>'}</div></div></div>`;
+}
+const PAID=['Pago','Separando','Enviado','Entregue'],MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const ATABS0=[['produtos','Produtos'],['estoque','Estoque'],['vendas','Vendas'],['pedidos','Pedidos'],['combos','Combos'],['compartilhados','Compartilhados']];
+const ATABS=()=>ATABS0.filter(([k])=>!(k==='combos'&&aarea==='importados'));
+const aMatch=p=>!aq||p.name.toLowerCase().includes(aq.trim().toLowerCase());
+function oTs(o){if(o.ts)return o.ts;const m=String(o.date).match(/(\d+)\/(\d+)\/(\d+)/);return m?new Date(+m[3],+m[2]-1,+m[1]).getTime():Date.now()}
+const paidOrders=()=>AO().filter(o=>PAID.includes(o.status));
+const sumT=a=>a.reduce((x,o)=>x+o.total,0);
+function monthRev(){const n=new Date(),a=new Date(n.getFullYear(),n.getMonth(),1).getTime();return sumT(paidOrders().filter(o=>oTs(o)>=a))}
+function goalInfo(){const g=goalVal(),m=monthRev();return {g,m,pct:g?Math.round(m/g*100):0}}
+function greet(){const h=new Date().getHours();return h<12?'Tenha um bom dia':h<18?'Tenha uma boa tarde':'Tenha uma boa noite'}
+function rangeStart(per){const n=new Date();return per==='14d'?new Date(n.getFullYear(),n.getMonth(),n.getDate()-13).getTime():new Date(n.getFullYear(),n.getMonth()-5,1).getTime()}
+function series(per){
+ const n=new Date(),pd=paidOrders(),out=[],inR=(a,b)=>sumT(pd.filter(o=>{const t=oTs(o);return t>=a&&t<b}));
+ if(per==='14d'){for(let i=13;i>=0;i--){const d=new Date(n.getFullYear(),n.getMonth(),n.getDate()-i),a=d.getTime();out.push({l:String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'),v:inR(a,a+864e5)})}}
+ else{for(let i=5;i>=0;i--){const d=new Date(n.getFullYear(),n.getMonth()-i,1),e=new Date(d.getFullYear(),d.getMonth()+1,1);out.push({l:MES[d.getMonth()],v:inR(d.getTime(),e.getTime())})}}
+ return out;
+}
+function bars(d){const mx=Math.max(...d.map(x=>x.v),1);return `<div class="chart" role="img" aria-label="Gráfico de vendas">${d.map(x=>`<div class="col" title="${x.l}: ${money(x.v)}"><div class="bw"><div class="b" style="height:${x.v/mx*100}%"></div></div><div class="l">${x.l}</div></div>`).join('')}</div>`}
+function hbars(items,fmt){const mx=Math.max(...items.map(x=>x.v),1);return items.length?items.map(x=>`<div class="hb"><span class="hl" title="${esc(x.l)}">${esc(x.l)}</span><span class="ht"><i class="${x.low?'low':''}" style="width:${Math.max(2,x.v/mx*100)}%"></i></span><span class="hv">${fmt(x.v)}</span></div>`).join(''):'<div class="empty">Sem dados ainda.</div>'}
+const tile=(l,v)=>`<div class="tile"><small>${l}</small><b>${v}</b></div>`;
+function aSearch(ph){return `<input id="aq" class="aq" value="${esc(aq)}" oninput="aq=this.value;keepFocus(this)" placeholder="${ph}" aria-label="${ph}">`}
+function keepFocus(el){const pos=el.selectionStart;render();const e=document.getElementById('aq');if(e){e.focus();try{e.setSelectionRange(pos,pos)}catch(_){}}}
+function saveGoal(){const v=parseFloat(String($('#goal').value).replace(',','.'));if(!(v>0))return alert('Informe um valor de meta maior que zero.');S.goals=S.goals||{};S.goals[aarea]=v;save();render()}
+function setPer(v){vper=v;render()}
+function togCb(id){cbSel=cbSel.includes(id)?cbSel.filter(x=>x!==id):[...cbSel,id]}
+function seedSales(){
+ let r=7;const rnd=()=>{r=(r*9301+49297)%233280;return r/233280};
+ S.seen=S.seen||[];
+ for(let i=0;i<22;i++){
+  const PP=AP(),p=PP[Math.floor(rnd()*PP.length)],q=1+Math.floor(rnd()*2),ts=Date.now()-Math.floor(rnd()*40)*864e5-Math.floor(rnd()*3e7),id='EX'+(aarea==='importados'?'I':'')+(i+1);
+  if(!p||S.orders.some(o=>o.id===id))continue;
+  S.orders.push({id,date:new Date(ts).toLocaleString('pt-BR'),ts,customer:{name:'Cliente exemplo '+(i+1),phone:'',email:'exemplo'+i+'@exemplo.com',addr:'',cep:''},items:[{key:p.id,name:p.name,price:p.price,qty:q,size:''}],subtotal:p.price*q,ship:{name:'PAC (exemplo)',price:22},total:p.price*q+22,pay:'Pix',status:rnd()>.3?'Entregue':'Pago',tracking:'',stockDone:true,sample:true,area:aarea});
+  S.seen.push(id);
+ }
+ S.orders.sort((a,b)=>oTs(b)-oTs(a));save();render();
+}
+function clearSales(){S.orders=S.orders.filter(o=>!(o.sample&&oArea(o)===aarea));save();render()}
+function checkNew(){
+ const seen=S.seen||[],n=S.orders.filter(o=>!seen.includes(o.id));
+ if(n.length&&view==='admin'&&adminOk&&aarea&&!apick&&!modal){newQ=n.map(o=>o.id);modal='neworder';render()}
+}
+function closeNew(ir){const f=S.orders.find(x=>x.id===newQ[0]);S.seen=[...(S.seen||[]),...newQ];newQ=[];modal='';if(ir){if(f)aarea=oArea(f);atab='pedidos';ofil='Todos';aq=''}save();render()}
+function vNewOrder(){
+ const o=S.orders.find(x=>x.id===newQ[0]);if(!o)return '';
+ return `<div class="modal"><div role="alertdialog" aria-label="Novo pedido" style="width:min(480px,100%)"><span class="st">Novo pedido · ${AREAS[oArea(o)].name}</span><h2 style="margin-top:8px">${o.id}</h2>${newQ.length>1?`<p class="tag">+ ${newQ.length-1} outro(s) pedido(s) novo(s)</p>`:''}
+ <div class="line"><span>Cliente</span><span>${esc(o.customer.name)}</span></div><div class="line"><span>WhatsApp</span><span>${esc(o.customer.phone)}</span></div>
+ ${o.items.map(i=>`<div class="line"><span>${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}
+ <div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line"><span>Pagamento</span><span>${esc(o.pay||'a combinar')}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
+ <div class="row"><button class="btn" onclick="closeNew(true)">Ver pedidos</button><button class="btn ghost" onclick="closeNew(false)">Fechar</button></div></div></div>`;
+}
+function vPanelHead(){
+ const gi=goalInfo();
+ return `<header><div class="wrap phd"><button class="brand" onclick="go('loja')" aria-label="Ir para a loja">BONELY<span class="sub2">PAINEL${adminOk&&aarea?' · '+AREAS[aarea].name.toUpperCase():''}</span></button><div class="row" style="margin:0">${adminOk&&aarea?`<button class="btn sm" onclick="apick=true;render()">Trocar painel</button>`:''}<button class="btn sm ghost" onclick="go('loja')">Ver loja</button>${adminOk?`<button class="btn sm ghost" onclick="adminOk=false;go('loja')">Sair</button>`:''}</div></div></header>
+ ${adminOk&&aarea?`<div class="welcome"><div class="wrap"><h1 class="serif">Olá, ${OWNER_FULL}</h1><p>Painel ${AREAS[aarea].name}. ${greet()}!</p><p class="meta">${gi.g?`Sua meta do mês está em <b>${gi.pct}%</b> (${money(gi.m)} de ${money(gi.g)}).`:'Você ainda não definiu a meta do mês. Defina na aba Vendas.'}</p>${gi.g?`<div class="prog"><i style="width:${Math.min(100,gi.pct)}%"></i></div>`:''}</div></div>`:''}`;
+}
 function vAdmin(){
  if(!adminOk)return `<section><div class="wrap" style="max-width:360px"><h2>Painel</h2><p class="sub">Acesso da loja. PIN da prévia: 1234</p><input id="pin" type="password" placeholder="PIN" aria-label="PIN"><div class="row"><button class="btn" onclick="adminLogin()">Entrar</button></div><p class="err">${msg}</p></div></section>`;
- const tabs=['produtos','estoque','pedidos','combos'];
+ if(!aarea)return '<section><div class="wrap" style="min-height:50vh"></div></section>';
+ const pend=AO().filter(o=>o.status===STATUS[0]).length;
  let body='';
- if(atab==='produtos')body=`<div class="two"><div><h3>Novo produto</h3><label>Nome</label><input id="pn"><label>Preço (R$)</label><input id="pp" type="number" step="0.01"><label>Tipo</label><select id="pt"><option value="roupa">Roupa</option><option value="avulso">Avulso</option></select><label>Público</label><select id="pg"><option>Feminino</option><option>Masculino</option><option>Unissex</option></select><label>Coleção</label><input id="pc" list="cl" placeholder="Ex.: Verão 26"><datalist id="cl">${S.colls.map(c=>`<option value="${esc(c)}">`).join('')}</datalist><label>Tamanhos (separe por vírgula)</label><input id="ps" placeholder="P,M,G"><label>Estoque inicial</label><input id="pq" type="number" min="0"><label>Foto</label><input type="file" accept="image/*" onchange="pickImg(this)"><span id="imgok" class="tag"></span><div class="row"><button class="btn" onclick="addProd()">Salvar produto</button></div></div>
- <div class="scroll"><table><tr><th>Produto</th><th>Preço</th><th>Estoque</th><th></th></tr>${S.products.map(p=>`<tr><td>${esc(p.name)}<div class="tag">${p.type}${p.coll?' · '+esc(p.coll):''}</div></td><td>${money(p.price)}</td><td class="${p.stock<=3?'err':''}">${p.stock}</td><td><button class="btn sm ghost" onclick="delProd(${p.id})">Excluir</button></td></tr>`).join('')}</table></div></div>`;
- if(atab==='estoque')body=`<div class="two"><div><h3>Entrada ou saída</h3><label>Produto</label><select id="mp">${S.products.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.stock})</option>`).join('')}</select><label>Movimento</label><select id="mt"><option value="entrada">Entrada</option><option value="saida">Saída</option></select><label>Quantidade</label><input id="mq" type="number" min="1"><label>Observação</label><input id="mn"><div class="row"><button class="btn" onclick="addMove()">Registrar</button></div></div>
- <div class="scroll"><h3>Histórico</h3>${S.moves.length?`<table><tr><th>Data</th><th>Produto</th><th>Mov.</th><th>Qtd</th><th>Obs.</th></tr>${S.moves.map(m=>`<tr><td>${m.date}</td><td>${esc(m.name)}</td><td>${m.type==='entrada'?'Entrada':'Saída'}</td><td>${m.qty}</td><td>${esc(m.note)}</td></tr>`).join('')}</table>`:'<div class="empty">Nenhuma movimentação ainda.</div>'}</div></div>`;
- if(atab==='pedidos')body=S.orders.length?S.orders.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id} · ${esc(o.customer.name)}</b><span class="st">${o.status}</span></div><div class="tag">${o.date} · ${esc(o.customer.phone)} · ${esc(o.customer.addr)} · CEP ${esc(o.customer.cep)}</div>${o.items.map(i=>`<div class="tag">${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</div>`).join('')}<div class="price">${money(o.total)} <span class="tag">(frete ${esc(o.ship.name)} ${money(o.ship.price)}) · Pagamento: ${esc(o.pay||'a combinar')}</span></div>
- <div class="row"><select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(s=>`<option ${s===o.status?'selected':''}>${s}</option>`).join('')}</select><input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button></div></div>`).join(''):'<div class="empty">Os pedidos feitos na loja aparecem aqui.</div>';
- if(atab==='combos')body=`<div class="two"><div><h3>Novo combo</h3><label>Nome</label><input id="cbn"><label>Preço do combo (R$)</label><input id="cbp" type="number" step="0.01"><label>Produtos</label>${S.products.map(p=>`<label style="color:var(--tx)"><input class="cb" type="checkbox" value="${p.id}" style="width:auto"> ${esc(p.name)}</label>`).join('')}<div class="row"><button class="btn" onclick="addCombo()">Salvar combo</button></div></div><div>${S.combos.map(c=>`<div class="line"><span>${esc(c.name)} · ${money(c.price)}</span><button class="btn sm ghost" onclick="delCombo(${c.id})">Excluir</button></div>`).join('')||'<div class="empty">Nenhum combo.</div>'}</div></div>`;
- return `<section><div class="wrap"><h2>Painel administrativo</h2><div class="tabs" style="margin-top:14px">${tabs.map(t=>`<button class="${atab===t?'on':''}" onclick="atab='${t}';render()">${t[0].toUpperCase()+t.slice(1)}</button>`).join('')}<button onclick="adminOk=false;view='loja';render()">Sair</button></div>${body}</div></section>`;
+ if(atab==='produtos'){
+  const l=AP().filter(aMatch),ep=aedit?S.products.find(x=>x.id==aedit):null;
+  body=`<div class="two"><div><h3>${ep?'Editar produto':'Novo produto'}</h3><label>Nome</label><input id="pn" value="${esc(ep?ep.name:'')}"><label>Preço (R$)</label><input id="pp" type="number" step="0.01" value="${ep?ep.price:''}"><input type="hidden" id="pt" value="${aarea==='importados'?'avulso':'roupa'}">${aarea==='importados'?'':`<label>Público</label><select id="pg">${['Feminino','Masculino','Unissex'].map(g=>`<option ${ep&&ep.gen===g?'selected':''}>${g}</option>`).join('')}</select>`}<label>Coleção</label><input id="pc" list="cl" placeholder="Ex.: Verão 26" value="${esc(ep?ep.coll:'')}"><datalist id="cl">${S.colls.map(c=>`<option value="${esc(c)}">`).join('')}</datalist><label>Tamanhos (separe por vírgula)</label><input id="ps" placeholder="P,M,G" value="${esc(ep?ep.sizes:'')}">${ep?'':'<label>Estoque inicial</label><input id="pq" type="number" min="0">'}<label>Marca</label><input id="pm" placeholder="Ex.: Nike, Zara..." value="${esc(ep?ep.brand:'')}"><label>Descrição</label><textarea id="pd" rows="4" placeholder="Conte sobre o produto: modelo, caimento, cuidados...">${esc(ep?ep.desc:'')}</textarea><label>Detalhes (um por linha, ex.: Material: algodão)</label><textarea id="px" rows="3" placeholder="Material: algodão&#10;Cor: preto&#10;Origem: importado">${esc(ep?ep.specs:'')}</textarea><label>Foto</label>${ep&&ep.img?'<div class="tag">Já tem foto. Escolha outra só se quiser trocar.</div>':''}<input type="file" accept="image/*" onchange="pickImg(this)"><span id="imgok" class="tag"></span><div class="row"><button class="btn" onclick="addProd()">${ep?'Salvar alterações':'Salvar produto'}</button>${ep?'<button class="btn ghost" onclick="cancelEdit()">Cancelar</button>':''}</div></div>
+  <div>${aSearch('Buscar produto pelo nome')}<div class="scroll"><table><tr><th>Produto</th><th>Preço</th><th>Estoque</th><th></th></tr>${l.map(p=>`<tr><td>${esc(p.name)}<div class="tag">${p.type==='avulso'?'importado':p.type}${p.coll?' · '+esc(p.coll):''}</div></td><td>${money(p.price)}</td><td class="${p.stock<=3?'err':''}">${p.stock}</td><td><div class="row" style="margin:0"><button class="btn sm ghost" onclick="editProd(${p.id})">Editar</button><button class="btn sm ghost" onclick="delProd(${p.id})">Excluir</button></div></td></tr>`).join('')}</table>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}</div></div></div>`;
+ }
+ if(atab==='estoque'){
+  const l=AP().filter(aMatch),ent=AM().filter(m=>m.type==='entrada').reduce((a,m)=>a+m.qty,0),sai=AM().filter(m=>m.type==='saida').reduce((a,m)=>a+m.qty,0);
+  const st=[...AP()].sort((a,b)=>a.stock-b.stock).slice(0,12).map(p=>({l:p.name,v:p.stock,low:p.stock<=3}));
+  body=`<div class="tiles">${tile('Unidades em estoque',AP().reduce((a,p)=>a+p.stock,0))}${tile('Produtos cadastrados',AP().length)}${tile('Estoque baixo (3 ou menos)',AP().filter(p=>p.stock<=3).length)}${tile('Entradas (total)',ent)}${tile('Saídas (total)',sai)}</div>
+  <h3>Estoque por produto</h3>${hbars(st,v=>v+' un.')}
+  <div class="two" style="margin-top:24px"><div><h3>Entrada ou saída</h3>${aSearch('Buscar produto pelo nome')}<label>Produto</label><select id="mp">${l.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.stock})</option>`).join('')}</select><label>Movimento</label><select id="mt"><option value="entrada">Entrada</option><option value="saida">Saída</option></select><label>Quantidade</label><input id="mq" type="number" min="1"><label>Observação</label><input id="mn"><div class="row"><button class="btn" onclick="addMove()">Registrar</button></div></div>
+  <div class="scroll"><h3>Histórico</h3>${AM().length?`<table><tr><th>Data</th><th>Produto</th><th>Mov.</th><th>Qtd</th><th>Obs.</th></tr>${AM().slice(0,60).map(m=>`<tr><td>${m.date}</td><td>${esc(m.name)}</td><td>${m.type==='entrada'?'Entrada':'Saída'}</td><td>${m.qty}</td><td>${esc(m.note)}</td></tr>`).join('')}</table>`:'<div class="empty">Nenhuma movimentação ainda.</div>'}</div></div>`;
+ }
+ if(atab==='vendas'){
+  const a=rangeStart(vper),inR=paidOrders().filter(o=>oTs(o)>=a),tot=sumT(inR),wait=AO().filter(o=>o.status===STATUS[0]),gi=goalInfo();
+  const cnt={};inR.forEach(o=>o.items.forEach(i=>{cnt[i.name]=(cnt[i.name]||0)+i.qty}));
+  const top=Object.entries(cnt).sort((x,y)=>y[1]-x[1]).slice(0,6).map(([l,v])=>({l,v}));
+  body=`<div class="tabs"><button class="${vper==='14d'?'on':''}" onclick="setPer('14d')">Últimos 14 dias</button><button class="${vper==='6m'?'on':''}" onclick="setPer('6m')">Últimos 6 meses</button></div>
+  <div class="tiles">${tile('Faturamento',money(tot))}${tile('Pedidos pagos',inR.length)}${tile('Ticket médio',money(inR.length?tot/inR.length:0))}${tile('Aguardando pagamento',wait.length+' ('+money(sumT(wait))+')')}</div>
+  <h3>Vendas por ${vper==='14d'?'dia':'mês'}</h3>${tot?bars(series(vper)):'<div class="empty">Ainda não há vendas pagas neste período.</div>'}
+  <div class="two"><div><h3>Produtos mais vendidos</h3>${hbars(top,v=>v+' un.')}</div>
+  <div><h3>Meta de vendas do mês</h3><label>Meta em reais</label><div class="row" style="margin-top:0"><input id="goal" type="number" min="0" step="50" value="${goalVal()||''}" placeholder="Ex.: 5000"><button class="btn" onclick="saveGoal()">Salvar meta</button></div>
+  ${gi.g?`<div class="prog"><i style="width:${Math.min(100,gi.pct)}%"></i></div><p>${money(gi.m)} de ${money(gi.g)} (${gi.pct}%). ${gi.pct>=100?'Meta batida!':'Faltam '+money(gi.g-gi.m)+'.'}</p>`:'<p class="tag">Defina uma meta para acompanhar no topo do painel.</p>'}</div></div>
+  <div class="row" style="margin-top:24px"><button class="btn sm ghost" onclick="seedSales()">Carregar vendas de exemplo</button><button class="btn sm ghost" onclick="clearSales()">Remover exemplos</button></div><p class="tag">Os exemplos servem só para ver os gráficos na prévia.</p>`;
+ }
+ if(atab==='pedidos'){
+  const cnt=st=>AO().filter(o=>o.status===st).length,k=aq.trim().toLowerCase();
+  const l=AO().filter(o=>(ofil==='Todos'||o.status===ofil)&&(!k||o.id.toLowerCase().includes(k)||o.customer.name.toLowerCase().includes(k)));
+  body=`<div class="pills">${['Todos',...STATUS].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?AO().length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
+  ${l.length?l.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id} · ${esc(o.customer.name)}</b><span class="st">${o.status}</span></div><div class="tag">${o.date} · ${esc(o.customer.phone)} · ${esc(o.customer.addr)} · CEP ${esc(o.customer.cep)}</div>${o.items.map(i=>`<div class="tag">${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</div>`).join('')}<div class="price">${money(o.total)} <span class="tag">(frete ${esc(o.ship.name)} ${money(o.ship.price)}) · Pagamento: ${esc(o.pay||'a combinar')}</span></div>
+  <div class="row">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select><input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
+ }
+ if(atab==='combos'){
+  const l=AP().filter(p=>aMatch(p)||cbSel.includes(p.id));
+  body=`<div class="two"><div><h3>Novo combo</h3><label>Nome</label><input value="${esc(cbName)}" oninput="cbName=this.value"><label>Preço do combo (R$)</label><input type="number" step="0.01" value="${esc(cbPrice)}" oninput="cbPrice=this.value"><label>Produtos do combo</label>${aSearch('Buscar produto pelo nome')}
+  ${l.map(p=>`<label style="color:var(--tx)"><input type="checkbox" style="width:auto" ${cbSel.includes(p.id)?'checked':''} onchange="togCb(${p.id})"> ${esc(p.name)}</label>`).join('')||'<div class="empty">Nenhum produto encontrado.</div>'}<div class="row"><button class="btn" onclick="addCombo()">Salvar combo</button></div></div>
+  <div><h3>Combos cadastrados</h3>${AC().map(c=>`<div class="line"><span>${esc(c.name)} · ${money(c.price)}</span><button class="btn sm ghost" onclick="delCombo(${c.id})">Excluir</button></div>`).join('')||'<div class="empty">Nenhum combo.</div>'}</div></div>`;
+ }
+ if(atab==='compartilhados')body=vShareAdmin();
+ return `<section><div class="wrap"><div class="tabs" style="margin-top:0">${ATABS().map(([k,l])=>`<button class="${atab===k?'on':''}" onclick="atab='${k}';aq='';aedit=null;render()">${l}${k==='pedidos'&&pend?' ('+pend+')':''}</button>`).join('')}</div>${body}</div></section>
+`;
 }
 function vCart(){
- const c=S.customer||{};const sh=ship&&ship.opts?ship.opts[ship.sel]:null;
+ const c={...(S.customer||{}),...cdraft};const sh=ship&&ship.opts?ship.opts[ship.sel]:null;const retira=IMP&&ship&&ship.mode==='retirada';
  return `<div class="drawer ${cartOpen?'open':''}" role="dialog" aria-label="Carrinho"><div class="line" style="border:0"><h2 style="margin:0">Carrinho</h2><button class="btn sm ghost" onclick="cartOpen=false;render()">Fechar</button></div>
- ${S.cart.length?S.cart.map((i,n)=>`<div class="line"><span>${i.qty}x ${esc(item(i.key).name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(item(i.key).price*i.qty)} <button class="btn sm ghost" onclick="rm(${n})" aria-label="Remover">×</button></span></div>`).join(''):'<div class="empty">Seu carrinho está vazio. Escolha uma peça no catálogo.</div>'}
- ${S.cart.length?`<label>CEP de entrega</label><div class="row" style="margin-top:0"><input id="cep" value="${esc(ship?.cep||'')}" placeholder="00000-000" inputmode="numeric"><button class="btn sm" onclick="doCep()">Calcular</button></div>
+ ${CART().length?CART().map((i,n)=>`<div class="line"><span>${i.qty}x ${esc(item(i.key).name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(item(i.key).price*i.qty)} <button class="btn sm ghost" onclick="rm(${n})" aria-label="Remover">×</button></span></div>`).join(''):'<div class="empty">Seu carrinho está vazio. Escolha uma peça no catálogo.</div>'}
+ ${CART().length?`${IMP?`<label>Como você quer receber?</label><select id="loc" onchange="setLocal(this.value)"><option value="">Escolha uma opção</option><option value="retirada" ${ship&&ship.mode==='retirada'?'selected':''}>Retirada na loja</option><optgroup label="Entrega na cidade">${CIDADES.map(x=>`<option ${ship&&!ship.other&&ship.city===x?'selected':''}>${x}</option>`).join('')}</optgroup><option value="__outra" ${ship&&ship.other?'selected':''}>Outra cidade</option></select>${ship&&ship.other?`<label for="oc">Nome da cidade</label><input id="oc" value="${esc(ship.city)}" placeholder="Ex.: Realeza" oninput="setCity(this.value)" autocomplete="off">`:''}<p class="tag">Entregamos na região. Em &ldquo;Outra cidade&rdquo; você informa o nome e a loja confirma pelo WhatsApp. O valor da entrega é calculado na hora da entrega.</p>`:`<label>CEP de entrega</label><div class="row" style="margin-top:0"><input id="cep" value="${esc(ship?.cep||'')}" placeholder="00000-000" inputmode="numeric"><button class="btn sm" onclick="doCep()">Calcular</button></div>
  ${ship&&ship.err?'<div class="err">CEP inválido.</div>':''}${ship&&ship.loading?'<div class="tag">Calculando…</div>':''}${ship&&ship.fail?'<div class="err">Não foi possível calcular o frete agora. Tente novamente.</div>':''}${ship&&ship.opts?ship.opts.map((o,n)=>`<label style="color:var(--tx);display:flex;gap:8px"><input type="radio" name="fr" style="width:auto" ${n===ship.sel?'checked':''} onchange="setShip(${n})"> ${o.name} · ${o.days} dias · ${money(o.price)}</label>`).join(''):''}
- <label>Nome</label><input id="cn" value="${esc(c.name)}"><label>WhatsApp</label><input id="cp" value="${esc(c.phone)}"><label>E-mail</label><input id="ce" type="email" value="${esc(c.email)}"><label>Endereço completo</label><input id="ca" value="${esc(c.addr)}"><label>Forma de pagamento</label><select id="cpay"><option>Pix</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>A combinar</option></select>
- <div class="line total" style="margin-top:14px"><span>Total</span><span>${money(cartSub()+(sh?sh.price:0))}</span></div>
+ `}
+ <label>Nome</label><input id="cn" value="${esc(c.name)}"><label>WhatsApp</label><input id="cp" value="${esc(c.phone)}"><label>E-mail</label><input id="ce" type="email" value="${esc(c.email)}">${retira?'':`<label>${IMP?'Endereço de entrega (rua, número, bairro)':'Endereço completo'}</label><input id="ca" value="${esc(c.addr==='Retirada na loja'?'':c.addr)}">`}<label>Forma de pagamento</label><select id="cpay"><option>Pix</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>A combinar</option></select>
+ <div class="line total" style="margin-top:14px"><span>Total</span><span>${money(cartSub()+(sh?sh.price:0))}</span></div>${IMP&&sh?`<p class="tag">${retira?'Retirada sem custo de frete.':'Mais o valor da entrega, calculado na hora da entrega.'}</p>`:''}
  <div class="row"><button class="btn" style="width:100%" onclick="checkout()">Finalizar pedido</button></div><p class="tag">Ao finalizar, o pedido fica salvo na sua conta e você segue com a loja para combinar o pagamento.</p>`:''}</div>`;
 }
 const IC={
@@ -235,16 +445,17 @@ const IC={
  card:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/></svg>',
  truck:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',
  pct:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 5L5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>',
+ share:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>',
  tel:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
  ig:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><path d="M17.5 6.5h.01"/></svg>'
 };
 function vFooter(){
  return `<footer><div class="wrap">
  <div class="fgrid">
- <div><img class="flogo" src="IMGs/logo_img.jpeg" alt="Bonely Store"><p class="fabout">Bem-vindo(a) à Bonely Store. Moda feminina e masculina com peças selecionadas e envio para todo o Brasil.</p></div>
- <div><h3>Categorias</h3><button class="lk" onclick="q='';cat('Feminino')">Feminino</button><button class="lk" onclick="q='';cat('Masculino')">Masculino</button><button class="lk" onclick="q='';cat('avulso')">Avulsos</button></div>
+ <div><img class="flogo" src="IMGs/logo_img.jpeg" alt="Bonely Store"><p class="fabout">Bem-vindo(a) à Bonely Store. ${IMP?'Produtos importados selecionados, com entrega em cidades da região ou retirada.':'Moda feminina e masculina com peças selecionadas e envio para todo o Brasil.'}</p></div>
+ <div><h3>Categorias</h3><button class="lk" onclick="q='';cat('Feminino')">Feminino</button><button class="lk" onclick="q='';cat('Masculino')">Masculino</button><a class="lk" href="importados.html">Importados</a></div>
  <div><h3>Institucional</h3><a class="lk" href="privacidade.html">Política de Privacidade</a><a class="lk" href="cancelamento.html">Política de Cancelamento e Trocas</a><button class="lk" onclick="go('admin')">Área da loja</button></div>
- <div><h3>Minhas compras</h3><button class="lk" onclick="go('conta')">Minha conta</button><button class="lk" onclick="go('rastreio')">Rastrear pedido</button><button class="lk" onclick="modal='frete';render()">Simular frete</button></div>
+ <div><h3>Minhas compras</h3><button class="lk" onclick="go('conta')">Minha conta</button><button class="lk" onclick="go('rastreio')">Rastrear pedido</button>${IMP?'':`<button class="lk" onclick="modal='frete';render()">Simular frete</button>`}</div>
  <div><h3>Contato</h3><ul class="contact"><li><a href="https://wa.me/${WA}" target="_blank" rel="noopener">${IC.wa}<span>WhatsApp</span></a></li></ul><div class="hours"><b>Horário de atendimento</b><p>${HOURS}</p></div></div>
  </div>
  <div class="fline"></div>
@@ -252,26 +463,34 @@ function vFooter(){
  <div class="copy">© ${new Date().getFullYear()} Bonely Store. Todos os direitos reservados.<br>Desenvolvido por <a href="https://linkneres.vercel.app/" target="_blank" rel="noopener">Dalton Neres</a> | Full Stack developer</div>
  </div></footer>`;
 }
-function go(v){pg='';view=v;cartOpen=false;menu=false;render();scrollTo(0,0)}
+function go(v){clearUrl();pg='';if(v!=='admin'){aarea=null;apick=false;aedit=null}view=v;cartOpen=false;menu=false;render();scrollTo(0,0)}
 function render(){
  if(window.STATIC_PAGE&&view!=='doc'){location.href='index.html?'+new URLSearchParams({v:view,f:filter,c:collF,q:q,g:pg});return}
- const n=S.cart.reduce((a,i)=>a+i.qty,0),cu=S.customer;
- $('#app').innerHTML=`<header><div class="wrap hd">
+ const n=CART().reduce((a,i)=>a+i.qty,0),cu=S.customer,panel=view==='admin';
+ $('#app').innerHTML=`${panel?vPanelHead():`<header><div class="wrap hd">
  <button class="iconbtn" onclick="menu=true;render()" aria-label="Abrir menu">${IC.menu}</button>
- <button class="brand" onclick="q='';go('loja')" aria-label="Bonely Store, início">BONELY</button>
+ <button class="brand" onclick="q='';go('loja')" aria-label="Bonely Store, início">BONELY${SEC==='importados'?'<span class="sub2">IMPORTADOS</span>':''}</button>
  <form class="search" onsubmit="doSearch(event)"><input id="q" value="${esc(q)}" placeholder="Digite o que você procura" aria-label="Buscar produtos"><button aria-label="Buscar">${IC.search}</button></form>
  <a class="hbox central" href="https://wa.me/${WA}" target="_blank" rel="noopener">${IC.head}<span><small>Central de</small>Atendimento</span></a>
  <button class="hbox" onclick="go('conta')">${IC.user}<span><small>${cu?'Olá, '+esc(cu.name.split(' ')[0]):'Olá, Bem-vindo(a)'}</small>${cu?'Minha conta':'Entre ou Cadastre-se'}</span></button>
- <button class="cartbtn" onclick="cartOpen=true;render()" aria-label="Carrinho, ${n} itens">${IC.cart}${n?`<b>${n}</b>`:''}</button></div></header>
- <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():vAdmin()}</main>${vFooter()}${vCart()}${vMenu()}${modal==='frete'?vModal():''}<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><a class="fab wa" href="https://wa.me/${WA}" target="_blank" rel="noopener" aria-label="WhatsApp">${IC.wa}</a></div>`;
+ <button class="cartbtn" onclick="cartOpen=true;render()" aria-label="Carrinho, ${n} itens">${IC.cart}${n?`<b>${n}</b>`:''}</button></div></header>`}
+ <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel?'':vFooter()}${vCart()}${vMenu()}${modal==='frete'?vModal():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><a class="fab wa" href="https://wa.me/${WA}" target="_blank" rel="noopener" aria-label="WhatsApp">${IC.wa}</a></div>`}`;
+ if(panel&&adminOk&&!modal)setTimeout(checkNew,0);
 }
+if(window.addEventListener)window.addEventListener('storage',e=>{
+ if(e.key!==K||!e.newValue)return;
+ try{const old=S.orders.length;S=JSON.parse(e.newValue);if(view==='admin'&&adminOk&&S.orders.length!==old)render()}catch(_){}
+});
 (function(){
+ const mp=(location.pathname||'').match(/\/produto\/[^/]*-(\d+)\/?$/);
+ if(!window.STATIC_PAGE&&mp){pid=mp[1];view='produto';return}
  const P=new URLSearchParams(location.search);
  if(window.STATIC_PAGE||![...P.keys()].length)return;
  if(['loja','conta','rastreio','admin'].includes(P.get('v')))view=P.get('v');
  if(P.get('f'))filter=P.get('f');
  collF=P.get('c')||'';q=P.get('q')||'';pg=P.get('g')||'';
- history.replaceState(null,'',location.pathname);
+ if(P.get('p')){pid=P.get('p');view='produto'}
+ else history.replaceState(null,'',location.pathname);
 })();
 render();
 if(pg){setTimeout(()=>{const e=document.getElementById(pg);if(e)e.scrollIntoView();pg=''},60)}
