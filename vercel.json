@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/produto/:slug", "destination": "/index.html" },
+    { "source": "/importados/produto/:slug", "destination": "/importados.html" }
+  ]
+}
