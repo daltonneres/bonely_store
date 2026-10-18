@@ -87,6 +87,13 @@ a.lk:hover{color:var(--gold2)}
 .doc h2{font-size:24px;margin:30px 0 6px}
 .doc p,.doc li{color:var(--tx);max-width:70ch}
 .doc .upd{color:var(--mut);font-size:14px;margin-bottom:24px}
+.docback{display:inline-flex;align-items:center;gap:10px;margin:28px 0 12px;padding:11px 22px;background:var(--bg2);border:1px solid var(--gold);color:var(--gold2);text-decoration:none;font-size:14px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;transition:background .2s,color .2s,box-shadow .2s}
+.docback svg{width:18px;height:18px;flex:none;transition:transform .2s}
+.docback:hover{background:var(--gold);color:#1a1409;box-shadow:0 4px 18px rgba(201,162,95,.28)}
+.docback:hover svg{transform:translateX(-4px)}
+.docback:active{transform:translateY(1px)}
+@media (max-width:640px){.docback{width:100%;justify-content:center;box-sizing:border-box}}
+@media (prefers-reduced-motion:reduce){.docback,.docback svg{transition:none}}
 
 .steps{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.steps span{font-size:13px;padding:4px 10px;border:1px solid var(--line);color:var(--mut)}.steps span.on{border-color:var(--gold);color:var(--gold2)}
 header .wrap{height:auto;min-height:64px;padding-top:6px;padding-bottom:6px}
@@ -260,3 +267,217 @@ textarea:focus{border-color:var(--gold);outline:0}
 .pspec li{display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
 .pspec span{color:var(--mut)}
 .pspec b{font-weight:400;color:var(--tx);text-align:right;overflow-wrap:anywhere}
+
+/* botão "Voltar ao catálogo" na página do produto */
+.backrow{margin:0 0 18px}
+.backbtn{display:inline-flex;align-items:center;gap:8px;padding:9px 18px 9px 12px;background:none;border:1px solid var(--line);border-radius:999px;color:var(--gold2);letter-spacing:.05em;font-size:15px;transition:border-color .2s,background .2s,color .2s}
+.backbtn svg{transition:transform .2s}
+.backbtn:hover{border-color:var(--gold);background:var(--gold);color:#1a1409}
+.backbtn:hover svg{transform:translateX(-3px)}
+@media (prefers-reduced-motion:reduce){.backbtn,.backbtn svg{transition:none}}
+
+/* selo de site seguro (rodapé) */
+.ssl{display:inline-flex;align-items:center;gap:12px;padding:10px 16px;border:1px solid var(--gold);color:var(--gold2)}
+.ssl span{display:flex;flex-direction:column;line-height:1.25}
+.ssl b{font-weight:500;color:var(--tx);letter-spacing:.04em}
+.ssl small{color:var(--mut);font-size:13px}
+
+/* confirmação do pedido (Minha conta) */
+.okbox{border:1px solid var(--gold);background:radial-gradient(ellipse at 0 0,#1d1710,var(--bg2) 70%);padding:18px 20px;margin:18px 0 6px}
+.okid{font:500 clamp(34px,7vw,48px)/1.1 'Cormorant Garamond',serif;color:var(--gold2);letter-spacing:.12em;margin:2px 0 6px}
+.okbox p{margin:0 0 4px;max-width:60ch}
+
+/* acesso rápido às categorias (logo abaixo do topo) */
+.cats{border-bottom:1px solid var(--line)}
+.cats .wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;padding-top:20px;padding-bottom:20px}
+.ctile{position:relative;display:flex;flex-direction:column;gap:2px;text-align:left;padding:14px 44px 14px 18px;background:var(--bg2);border:1px solid var(--line);color:var(--tx);text-decoration:none;transition:border-color .2s,background .2s}
+.ctile b{font:500 24px/1.15 'Cormorant Garamond',Georgia,serif;color:var(--gold2)}
+.ctile small{color:var(--mut);font-size:13.5px;line-height:1.3}
+.ctile span{position:absolute;right:16px;top:50%;transform:translateY(-50%);color:var(--gold);font-size:20px;transition:transform .2s}
+.ctile:hover{border-color:var(--gold);background:#1d1710}
+.ctile:hover span{transform:translate(4px,-50%)}
+.ctile.imp{border-color:var(--gold)}
+@media (max-width:700px){.cats .wrap{grid-template-columns:repeat(2,1fr);gap:10px}.ctile{padding:12px 34px 12px 14px}.ctile b{font-size:21px}.ctile span{right:12px}}
+@media (prefers-reduced-motion:reduce){.ctile,.ctile span{transition:none}}
+
+/* hero da moda sem botão: o espaço de baixo fica menor */
+.hero:has(.herologo){padding-bottom:28px}
+.hero:has(.herologo) p{margin-bottom:0}
+.hero:has(h1.imp){padding-bottom:32px}
+.hero:has(h1.imp) p{margin-bottom:0}
+
+/* pop-up de entrar / cadastrar */
+.modal>.lgn{position:relative;width:min(420px,100%);padding:40px clamp(24px,6vw,44px) 28px;border:1px solid var(--line);border-top:2px solid var(--gold);background:var(--bg2);box-shadow:0 24px 60px rgba(0,0,0,.55);max-height:92dvh;text-align:center}
+.lgn .lgx{position:absolute;top:10px;right:12px;width:40px;height:40px;background:none;border:0;color:var(--mut);font-size:28px;line-height:1;padding:0}
+.lgn .lgx:hover{color:var(--gold2)}
+.lgn .lgk{display:block;font:500 15px 'Cormorant Garamond',serif;letter-spacing:.42em;color:var(--gold);margin-bottom:14px;padding-left:.42em}
+.lgn h2{font-size:clamp(32px,7vw,40px);line-height:1.1;color:var(--tx)}
+.modal .lgn p.lgs{color:var(--mut);margin:10px auto 6px;font-size:15.5px;line-height:1.5;max-width:32ch}
+.lgn .lgnote{margin:16px 0 0;padding:2px 0 2px 14px;border-left:2px solid var(--gold);color:var(--gold2);font-size:14.5px;line-height:1.45;text-align:left}
+.lgn label{display:block;margin:22px 0 0;font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);text-align:left}
+.lgn input{background:transparent;border:0;border-bottom:1px solid var(--line);padding:10px 0 12px;font-size:17px;color:var(--tx);outline:none;transition:border-color .2s}
+.lgn input:focus{border-bottom-color:var(--gold)}
+.lgn input:focus-visible{outline:none}
+.modal .lgn p.lgerr{color:var(--err);margin:12px 0 0;font-size:14.5px;text-align:left}
+.lgn .lgb{display:block;width:100%;margin-top:28px;padding:16px;background:var(--gold);color:#1a1409;border:0;font:500 14px Jost,sans-serif;letter-spacing:.18em;text-transform:uppercase;transition:background .2s}
+.lgn .lgb:hover{background:var(--gold2)}
+.modal .lgn p.lgsw{margin:18px 0 0;font-size:15px;color:var(--mut)}
+.lgn .lgsw button{background:none;border:0;padding:0;color:var(--gold2);text-decoration:underline;text-underline-offset:4px;font-size:inherit}
+.lgn .lgsw button:hover{color:var(--gold)}
+.modal .lgn p.lgf{margin:22px 0 0;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;line-height:1.55;color:var(--mut)}
+.lgn .lgf a{color:var(--gold2)}
+@media (max-width:700px){.modal{padding:12px}.modal>.lgn{padding:34px 22px 22px}.lgn label{margin-top:18px}.lgn .lgb{margin-top:24px;padding:15px}}
+@media (prefers-reduced-motion:reduce){.lgn input,.lgn .lgb{transition:none}}
+
+/* ==========================================================================
+   Painel da loja | repaginada. Tudo escopado em body.is-panel, a loja não muda.
+   ========================================================================== */
+body.is-panel{background:radial-gradient(ellipse 90% 45% at 50% -8%,#21180d 0,transparent 70%) fixed,var(--bg)}
+
+/* topo */
+body.is-panel header{background:rgba(13,11,9,.8);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid rgba(201,162,95,.3);box-shadow:0 8px 30px -18px rgba(0,0,0,.9)}
+body.is-panel .phd .row{margin:0;gap:10px}
+body.is-panel .welcome{position:relative;padding:34px 0 30px;background:linear-gradient(135deg,#1f1810 0,rgba(13,11,9,0) 62%);border-bottom:1px solid rgba(201,162,95,.18)}
+body.is-panel .welcome:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--gold2),rgba(201,162,95,.1))}
+body.is-panel .welcome h1{font-size:clamp(30px,5.4vw,46px);line-height:1.08;letter-spacing:.01em}
+body.is-panel .welcome p{color:var(--mut)}
+body.is-panel .welcome .meta{color:var(--gold2);margin-top:10px}
+body.is-panel .welcome .meta b{font-size:1.15em}
+
+/* botões */
+body.is-panel .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:10px;padding:11px 22px;font-weight:500;letter-spacing:.03em;cursor:pointer;background:linear-gradient(180deg,var(--gold2),var(--gold));color:#1a1409;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 8px 18px -8px rgba(201,162,95,.6);transition:transform .15s,box-shadow .2s,background .2s,border-color .2s}
+body.is-panel .btn:hover{background:linear-gradient(180deg,#f2d9a4,var(--gold2));transform:translateY(-1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 12px 22px -8px rgba(201,162,95,.7)}
+body.is-panel .btn:active{transform:translateY(1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 3px 8px -4px rgba(201,162,95,.6)}
+body.is-panel .btn.sm{padding:8px 15px;font-size:14px;border-radius:9px}
+body.is-panel .btn.ghost{background:rgba(201,162,95,.07);border-color:rgba(201,162,95,.5);color:var(--gold2);box-shadow:none}
+body.is-panel .btn.ghost:hover{background:rgba(201,162,95,.17);border-color:var(--gold2);box-shadow:0 8px 20px -12px rgba(201,162,95,.6)}
+body.is-panel .btn.danger{background:rgba(217,128,107,.07);border-color:rgba(217,128,107,.5);color:var(--err)}
+body.is-panel .btn.danger:hover{background:rgba(217,128,107,.17);border-color:var(--err);box-shadow:0 8px 20px -12px rgba(217,128,107,.7)}
+
+/* abas e filtros */
+body.is-panel .tabs{display:flex;flex-wrap:nowrap;gap:4px;width:fit-content;max-width:100%;overflow-x:auto;padding:5px;margin-bottom:26px;background:var(--bg2);border:1px solid var(--line);border-radius:14px;scrollbar-width:none}
+body.is-panel .tabs::-webkit-scrollbar{display:none}
+body.is-panel .tabs button{flex:none;border:0;border-radius:10px;padding:10px 18px;color:var(--mut);cursor:pointer;white-space:nowrap;transition:background .2s,color .2s}
+body.is-panel .tabs button:hover{background:rgba(201,162,95,.1);color:var(--gold2)}
+body.is-panel .tabs button.on{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#1a1409;font-weight:500;box-shadow:0 6px 14px -8px rgba(201,162,95,.8)}
+body.is-panel .pills button{border-radius:999px;padding:8px 18px;font-size:14px;letter-spacing:.02em;background:var(--bg2);cursor:pointer;transition:background .2s,border-color .2s,color .2s}
+body.is-panel .pills button:hover{border-color:var(--gold);color:var(--gold2)}
+body.is-panel .pills button.on{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#1a1409;border-color:transparent;font-weight:500}
+
+/* blocos e formulários */
+body.is-panel .two>div{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:24px;min-width:0}
+body.is-panel h3{font-size:24px;color:var(--gold2);margin:0 0 6px}
+body.is-panel .two>div>h3:first-child{padding-bottom:12px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+body.is-panel label{font-size:13px;letter-spacing:.04em;color:var(--mut);margin:16px 0 6px}
+body.is-panel input,body.is-panel select,body.is-panel textarea{background:#0f0d0a;border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--tx);transition:border-color .2s,box-shadow .2s}
+body.is-panel input:hover,body.is-panel select:hover,body.is-panel textarea:hover{border-color:#41372a}
+body.is-panel input:focus,body.is-panel select:focus,body.is-panel textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,162,95,.16);outline:0}
+body.is-panel input::placeholder,body.is-panel textarea::placeholder{color:#6f6657}
+body.is-panel select{-webkit-appearance:none;appearance:none;padding-right:38px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23c9a25f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:16px}
+body.is-panel input[type=checkbox]{accent-color:var(--gold);width:18px;height:18px;padding:0;vertical-align:middle;margin-right:6px}
+body.is-panel input[type=file]{padding:8px;color:var(--mut);font-size:14px}
+body.is-panel input[type=file]::file-selector-button{margin-right:12px;padding:8px 14px;border:1px solid rgba(201,162,95,.5);border-radius:8px;background:rgba(201,162,95,.08);color:var(--gold2);font:inherit;cursor:pointer;transition:background .2s}
+body.is-panel input[type=file]::file-selector-button:hover{background:rgba(201,162,95,.2)}
+body.is-panel textarea{line-height:1.7;min-height:96px}
+body.is-panel textarea#px{min-height:150px}
+body.is-panel .hint{margin:7px 0 0;font-size:13px;color:var(--mut)}
+body.is-panel .hint:before{content:"✦ ";color:var(--gold)}
+body.is-panel .two .row{margin-top:20px}
+body.is-panel .aq{margin-bottom:16px}
+body.is-panel .err{color:var(--err)}
+
+/* tabelas */
+body.is-panel .scroll{border:1px solid var(--line);border-radius:14px;background:#12100c}
+body.is-panel .two>div>.scroll,body.is-panel .two>.scroll{padding:6px 14px 10px}
+body.is-panel table{border-collapse:separate;border-spacing:0}
+body.is-panel th{font-size:12px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);padding:14px 12px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+body.is-panel td{padding:13px 12px;vertical-align:middle;border-bottom:1px solid rgba(46,39,29,.7)}
+body.is-panel tr:last-child td{border-bottom:0}
+body.is-panel tr:hover td{background:rgba(201,162,95,.05)}
+body.is-panel td.err{font-weight:500}
+body.is-panel .pnm{display:flex;align-items:center;gap:12px;min-width:200px}
+body.is-panel .pth{width:46px;height:46px;flex:none;border-radius:10px;overflow:hidden;display:grid;place-items:center;border:1px solid var(--line);background:radial-gradient(circle at 50% 35%,#2a2218,#120f0b);font:500 20px 'Cormorant Garamond',serif;color:var(--gold)}
+body.is-panel .pth img{width:100%;height:100%;object-fit:cover}
+body.is-panel .empty{text-align:center;padding:34px 12px;color:var(--mut);border:1px dashed var(--line);border-radius:14px;margin:12px 0}
+
+/* indicadores e gráficos */
+body.is-panel .tiles{gap:14px}
+body.is-panel .tile{position:relative;border-radius:14px;padding:18px 18px 16px;background:linear-gradient(180deg,#1b160f,var(--bg2));overflow:hidden;transition:transform .2s,border-color .2s}
+body.is-panel .tile:before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,var(--gold),transparent)}
+body.is-panel .tile:hover{transform:translateY(-2px);border-color:rgba(201,162,95,.45)}
+body.is-panel .tile small{letter-spacing:.04em}
+body.is-panel .tile b{display:block;margin-top:4px;font-size:30px;line-height:1.1}
+body.is-panel .chart{padding:18px 14px 8px;background:var(--bg2);border:1px solid var(--line);border-radius:14px;height:240px}
+body.is-panel .chart .bw{border-bottom-color:rgba(201,162,95,.25)}
+body.is-panel .chart .b{background:linear-gradient(180deg,var(--gold2),#7d6130);border-radius:6px 6px 0 0;transition:filter .2s}
+body.is-panel .chart .col:hover .b{background:linear-gradient(180deg,#f4dcaa,var(--gold));filter:drop-shadow(0 0 8px rgba(230,200,143,.35))}
+body.is-panel .hb{margin:10px 0}
+body.is-panel .hb .ht{height:10px;border:0;border-radius:999px;background:#201b13;overflow:hidden}
+body.is-panel .hb .ht i{border-radius:999px;background:linear-gradient(90deg,#8a6b36,var(--gold2))}
+body.is-panel .hb .ht i.low{background:linear-gradient(90deg,#9a4a3a,var(--err))}
+body.is-panel .prog{height:10px;border:0;border-radius:999px;background:#211c14;overflow:hidden}
+body.is-panel .prog i{border-radius:999px;background:linear-gradient(90deg,#8a6b36,var(--gold2));box-shadow:0 0 14px rgba(230,200,143,.4)}
+
+/* pedidos */
+body.is-panel .card.in{border-radius:16px;transition:border-color .2s,transform .2s}
+body.is-panel .card.in:hover{border-color:rgba(201,162,95,.4)}
+body.is-panel .line{border-bottom-color:rgba(46,39,29,.8)}
+body.is-panel .st{padding:3px 12px;border-radius:999px;font-size:12.5px;letter-spacing:.03em;white-space:nowrap}
+body.is-panel .st[data-s]{--c:var(--gold2);display:inline-flex;align-items:center;gap:7px;color:var(--c);background:rgba(255,255,255,.04);border:1px solid var(--c);background:color-mix(in srgb,var(--c) 13%,transparent);border-color:color-mix(in srgb,var(--c) 45%,transparent)}
+body.is-panel .st[data-s]:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--c)}
+body.is-panel .st[data-s="Aguardando pagamento"]{--c:#e2b45a}
+body.is-panel .st[data-s="Pago"]{--c:#8fb08a}
+body.is-panel .st[data-s="Separando"]{--c:#7fa9cf}
+body.is-panel .st[data-s="Enviado"]{--c:#a995d6}
+body.is-panel .st[data-s="Entregue"]{--c:#6fc28e}
+body.is-panel .st[data-s="Cancelado"]{--c:#d9806b}
+
+/* janelas (escolha do painel, novo pedido) */
+body.is-panel .modal{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+body.is-panel .modal>div{border-radius:18px;border-color:rgba(201,162,95,.5);box-shadow:0 30px 80px -20px rgba(0,0,0,.9)}
+body.is-panel .apc{border-radius:14px;background:#12100c;transition:border-color .2s,background .2s,transform .2s,box-shadow .2s}
+body.is-panel .apc:hover,body.is-panel .apc:focus-visible{transform:translateY(-2px);box-shadow:0 14px 30px -16px rgba(201,162,95,.55)}
+body.is-panel .apb span{border-radius:999px}
+
+/* tela do PIN */
+body.is-panel .plogin{margin-top:9vh;padding:38px 30px 30px;text-align:center;background:linear-gradient(180deg,#1a150d,var(--bg2));border:1px solid rgba(201,162,95,.4);border-top:2px solid var(--gold);border-radius:18px;box-shadow:0 30px 70px -30px rgba(0,0,0,.95)}
+body.is-panel .plogin .spark{display:block;margin-bottom:10px}
+body.is-panel .plogin h2{margin-bottom:4px}
+body.is-panel .plogin input{text-align:center;font-size:22px;letter-spacing:.45em;padding:14px;margin-top:10px}
+body.is-panel .plogin .row{justify-content:center;margin-top:16px}
+body.is-panel .plogin .btn{width:100%}
+body.is-panel .plogin .err{min-height:1.4em;margin:12px 0 0}
+
+@media (max-width:640px){
+ body.is-panel .two>div{padding:18px;border-radius:14px}
+ body.is-panel .tile b{font-size:26px}
+ body.is-panel .welcome{padding:26px 0 24px}
+ body.is-panel .phd .btn{flex:1}
+ body.is-panel .chart{height:200px}
+}
+@media (prefers-reduced-motion:reduce){body.is-panel *{transition:none!important}}
+
+/* configuração dos campos do cadastro */
+body.is-panel .cfr{display:flex;align-items:flex-end;gap:14px;padding:4px 0 6px}
+body.is-panel .cfl{flex:1;min-width:0}
+body.is-panel .cfl label{margin:12px 0 5px}
+body.is-panel .cfs,body.is-panel label.cfs{display:inline-flex;align-items:center;gap:8px;flex:none;margin:0 0 10px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:#0f0d0a;color:var(--tx);font-size:14px;letter-spacing:0;cursor:pointer;transition:border-color .2s}
+body.is-panel .cfs:hover{border-color:var(--gold)}
+body.is-panel .cfs input{margin:0}
+body.is-panel .cfreq{flex:none;margin:0 0 12px;padding:10px 14px;border:1px dashed var(--line);border-radius:10px;font-size:13px;color:var(--mut)}
+body.is-panel .toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;max-width:92vw;padding:12px 22px;border-radius:999px;background:#1a1510;border:1px solid var(--gold);color:var(--gold2);font-size:15px;box-shadow:0 14px 40px -10px rgba(0,0,0,.9);animation:toastin .25s ease-out}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,10px)}}
+@media (max-width:480px){body.is-panel .cfr{flex-wrap:wrap;gap:0}body.is-panel .cfl{flex-basis:100%}body.is-panel .cfs,body.is-panel .cfreq{margin-top:2px}}
+
+/* checklist de opções (tamanhos, sabores...) */
+body.is-panel .chk{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 4px}
+body.is-panel label.opt{position:relative;display:inline-flex;margin:0;padding:0;font-size:14px;letter-spacing:0;color:var(--tx);cursor:pointer}
+body.is-panel .opt input{position:absolute;opacity:0;width:1px;height:1px;margin:0;padding:0;pointer-events:none}
+body.is-panel .opt span{display:inline-flex;align-items:center;gap:7px;min-width:46px;justify-content:center;padding:9px 16px;border:1px solid var(--line);border-radius:999px;background:#0f0d0a;transition:background .15s,border-color .15s,color .15s,transform .1s}
+body.is-panel .opt:hover span{border-color:var(--gold);color:var(--gold2)}
+body.is-panel .opt:active span{transform:scale(.96)}
+body.is-panel .opt input:checked+span{background:linear-gradient(180deg,var(--gold2),var(--gold));border-color:transparent;color:#1a1409;font-weight:500;box-shadow:0 6px 14px -8px rgba(201,162,95,.8)}
+body.is-panel .opt input:checked+span:before{content:"✓";font-size:13px}
+body.is-panel .opt input:focus-visible+span{outline:2px solid var(--gold);outline-offset:2px}
+body.is-panel .chkact{display:flex;gap:16px;margin:4px 0 12px}
+body.is-panel .chkact .a-link{background:none;border:0;padding:0;color:var(--gold2);font-size:13px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
