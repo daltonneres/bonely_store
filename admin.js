@@ -15,7 +15,12 @@ plus:'<path d="M12 5v14M5 12h14"/>',x:'<path d="M18 6L6 18M6 6l12 12"/>',menu:'<
 dl:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
 chat:'<path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 21l2.1-5.4A8.5 8.5 0 1 1 21 11.5z"/>',
 up:'<path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"/>',down:'<path d="M23 18l-9.5-9.5-5 5L1 6M17 18h6v-6"/>',
-spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>'};
+spark:'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
+mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+lock:'<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+eyeoff:'<path d="M17.9 17.9A10.6 10.6 0 0 1 12 19c-6.4 0-10-7-10-7a18 18 0 0 1 4.1-4.9M9.9 5.2A9.7 9.7 0 0 1 12 5c6.4 0 10 7 10 7a18 18 0 0 1-2.2 3.2M1 1l22 22"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+shield:'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'};
 const i=n=>`<svg class="a-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PA[n]}</svg>`;
 const st={tab:'geral',days:30,q:'',f:'',lim:25,sort:{},nav:false,drawer:null,modal:null,img:null,msg:''};
 let Q=[],rz=null;
@@ -262,10 +267,14 @@ function shell(){
  <div class="a-main"><div class="a-mbar"><button class="a-ibtn" onclick="ADM.nav(true)" aria-label="Abrir menu">${i('menu')}</button><img class="a-mlogo" src="${LOGO}" alt="Bonely Store"><span></span></div>${demo}${top()}<div class="a-page">${({geral:pGeral,pedidos:pPed,produtos:pProd,estoque:pEst,combos:pCmb,planilhas:pPlan})[st.tab]()}</div></div>
  ${st.drawer?drawer():''}${st.modal?({prod:mProd,mv:mMv,cmb:mCmb})[st.modal.t]():''}</div>`;
 }
-const login=()=>`<div class="a-login"><form class="a-lc" onsubmit="ADM.enter(event)"><img src="${LOGO}" alt="Bonely Store"><h1>Olá, ${esc(OWNER)}</h1>${FBM?`<p class="a-mut">Entre com o e-mail e a senha da loja.</p><label for="aem">E-mail</label><input id="aem" type="email" value="${esc(EMAIL)}" autocomplete="username" style="letter-spacing:normal;font-size:16px"><label for="pin">Senha</label><input id="pin" type="password" autocomplete="current-password" style="letter-spacing:normal;font-size:16px">`:`<p class="a-mut">Digite o PIN para abrir o painel da loja.</p><label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password">`}<button class="a-btn" type="submit">Entrar</button><p class="a-err" role="alert">${esc(st.msg)}</p><button type="button" class="a-link" onclick="ADM.exit()">Voltar para a loja</button>${FBM?'':'<small class="a-mut">Prévia: o PIN é 1234</small>'}</form></div>`;
+const login=()=>{
+ const em=st.em!==undefined?st.em:EMAIL;
+ const feats=[['bag','Pedidos em tempo real'],['box','Estoque sempre em dia'],['up','Vendas e metas do mês']];
+ const form=FBM?`<label for="aem">E-mail</label><div class="l-fld">${i('mail')}<input id="aem" type="email" value="${esc(em)}" autocomplete="username" placeholder="voce@exemplo.com"></div><label for="pin">Senha</label><div class="l-fld">${i('lock')}<input id="pin" type="password" autocomplete="current-password" placeholder="Sua senha"><button type="button" class="l-eye" onclick="ADM.eye()" aria-label="Mostrar senha">${i('eye')}</button></div>`:`<label for="pin">PIN de acesso</label><div class="l-fld">${i('lock')}<input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••"><button type="button" class="l-eye" onclick="ADM.eye()" aria-label="Mostrar PIN">${i('eye')}</button></div>`;
+ return `<div class="a-login"><aside class="l-brand"><img src="${LOGO}" alt="Bonely Store"><h2>Painel de gestão</h2><p>Tudo da sua loja em um só lugar.</p><ul>${feats.map(f=>`<li>${i(f[0])}<span>${f[1]}</span></li>`).join('')}</ul></aside><main class="l-pane"><form class="l-card" onsubmit="ADM.enter(event)" novalidate><span class="l-badge">${i('shield')}Acesso restrito</span><h1>Bem-vinda de volta, ${esc(OWNER)}</h1><p class="l-sub">${FBM?'Entre com o e-mail e a senha da loja para continuar.':'Digite o PIN para abrir o painel da loja.'}</p>${form}<p class="l-err" role="alert" aria-live="polite">${esc(st.msg)}</p><button class="a-btn l-go" type="submit">Entrar no painel</button>${FBM?'':'<small class="l-hint">Prévia: o PIN é 1234</small>'}<div class="l-foot"><span>${i('lock')}Conexão protegida</span><button type="button" class="a-link" onclick="ADM.exit()">Voltar para a loja</button></div></form></main></div>`};
 function render(){
  const y=scrollY;Q=[];
- if(!adminOk){$('#app').innerHTML=login();document.body.style.overflow='';setTimeout(()=>{const e=$('#pin');e&&e.focus()},0);return}
+ if(!adminOk){$('#app').innerHTML=login();document.body.style.overflow='';setTimeout(()=>{const e=($('#aem')&&!$('#aem').value)?$('#aem'):$('#pin');e&&e.focus()},0);return}
  $('#app').innerHTML=shell();
  document.body.style.overflow=(st.drawer||st.modal||st.nav)?'hidden':'';
  draw();list();scrollTo(0,y);
@@ -293,9 +302,14 @@ function seed(){
 }
 const close=()=>{st.drawer=null;st.modal=null;st.img=null;render()};
 return{render,seed,close,csv,xlsx,
+ eye(){const p=$('#pin'),b=$('.l-eye');if(!p)return;const h=p.type==='password';p.type=h?'text':'password';b.innerHTML=i(h?'eyeoff':'eye');b.setAttribute('aria-label',h?'Ocultar senha':'Mostrar senha');p.focus()},
  async enter(e){e.preventDefault();
-  if(FBM){try{await FB.login($('#aem').value,$('#pin').value);await enterAdmin();st.msg=''}catch(x){st.msg=FB.errMsg(x)}return render()}
-  if($('#pin').value==='1234'){adminOk=true;st.msg='';render()}else{st.msg='PIN incorreto. Tente de novo.';render()}},
+  const bt=$('.l-go'),pv=$('#pin').value;
+  if(FBM){st.em=($('#aem').value||'').trim();
+   if(!st.em||!pv){st.msg='Preencha o e-mail e a senha.';return render()}
+   if(bt){bt.disabled=true;bt.textContent='Entrando…'}
+   try{await FB.login(st.em,pv);await enterAdmin();st.msg='';delete st.em}catch(x){st.msg=FB.errMsg(x)}return render()}
+  if(pv==='1234'){adminOk=true;st.msg='';render()}else{st.msg='PIN incorreto. Tente de novo.';render()}},
  async logout(){if(FBM){await FB.logout();location.reload();return}adminOk=false;st.drawer=st.modal=null;st.nav=false;render()},
  exit(){st.nav=false;view='loja';document.body.style.overflow='';window.render();scrollTo(0,0)},
  go(t,f){st.tab=t;st.q='';st.f=f||'';st.lim=25;st.nav=false;st.drawer=st.modal=null;render();scrollTo(0,0)},

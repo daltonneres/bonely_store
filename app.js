@@ -603,7 +603,7 @@ function vFooter(){
  <div class="fgrid">
  <div><img class="flogo" src="${LOGO}" alt="Bonely Store"><p class="fabout">Bem-vindo(a) à Bonely Store. ${IMP?'Produtos importados selecionados, com entrega em cidades da região ou retirada.':'Moda feminina e masculina com peças selecionadas e envio para todo o Brasil.'}</p></div>
  <div><h3>Categorias</h3><button class="lk" onclick="q='';cat('Feminino')">Feminino</button><button class="lk" onclick="q='';cat('Masculino')">Masculino</button><a class="lk" href="${pageUrl('importados')}">Importados</a></div>
- <div><h3>Institucional</h3><a class="lk" href="${pageUrl('privacidade')}">Política de Privacidade</a><a class="lk" href="${pageUrl('cancelamento')}">Política de Cancelamento e Trocas</a><button class="lk" onclick="go('admin')">Área da loja</button></div>
+ <div><h3>Institucional</h3><a class="lk" href="${pageUrl('privacidade')}">Política de Privacidade</a><a class="lk" href="${pageUrl('cancelamento')}">Política de Cancelamento e Trocas</a></div>
  <div><h3>Minhas compras</h3><button class="lk" onclick="${acct()}">Minha conta</button>${IMP?'':`<button class="lk" onclick="go('rastreio')">Rastrear pedido</button>`}${IMP?'':`<button class="lk" onclick="modal='frete';render()">Simular frete</button>`}</div>
  <div><h3>Contato</h3><ul class="contact"><li><a href="https://wa.me/${WA}" target="_blank" rel="noopener">${IC.wa}<span>WhatsApp</span></a></li>${EMAIL?`<li><a href="mailto:${EMAIL}">${IC.mail}<span>${EMAIL}</span></a></li>`:''}</ul><div class="hours"><b>Horário de atendimento</b><p>${HOURS}</p></div></div>
  </div>
