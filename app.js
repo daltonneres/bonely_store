@@ -28,13 +28,17 @@ if(!S)S=demo();
 function CART(){return S[CK]||(S[CK]=[])}
 /* migra importados que ficaram no carrinho antigo (misturado) para o carrinho próprio */
 try{if(!S.cartImp)S.cartImp=[];const mv=(S.cart||[]).filter(i=>{const p=S.products.find(x=>x.id==i.key);return p&&p.type==='avulso'});if(mv.length){S.cartImp.push(...mv);S.cart=S.cart.filter(i=>!mv.includes(i));localStorage.setItem(K,JSON.stringify(S))}}catch(e){}
-const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
+const SK='bonely_session_v1';let FBM=false; /* FBM = Firebase ativo */
+const save=()=>{
+ try{if(FBM)localStorage.setItem(SK,JSON.stringify({customer:S.customer||null,cart:S.cart||[],cartImp:S.cartImp||[]}));else localStorage.setItem(K,JSON.stringify(S))}catch(e){}
+ if(FBM&&FB.admin&&FB.loaded)FB.queue(S);
+};
 const $=s=>document.querySelector(s);
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='',pid=null,shareId=null,asp=null,asn='',asw='',aq='',ofil='Todos',vper='14d',cbSel=[],cbName='',cbPrice='',newQ=[],cdraft={},aarea=null,apick=false,aedit=null,justOrdered=null,trkPre=null;
 
-/* Camada de dados: hoje usa localStorage (prévia). No projeto real, cada save() vira gravação no Firestore. */
+/* Camada de dados: com firebase.js carregado, a loja lê do Firestore e o painel grava nele (save() -> FB.queue). Sem ele, cai no localStorage (prévia). */
 
 function freteDemo(c){const d=Math.abs(+c[0]-8);return [{name:'PAC (exemplo)',price:+(16+d*3.2).toFixed(2),days:4+d,demo:1},{name:'SEDEX (exemplo)',price:+(26+d*5.1).toFixed(2),days:1+Math.ceil(d/2),demo:1}]}
 async function calcFrete(cep){
@@ -78,7 +82,8 @@ function setLocal(v){keepDraft();
 async function doCep(){const v=$('#cep').value;ship={loading:1,cep:v};render();const f=await calcFrete(v);ship=f==='erro'?{fail:1,cep:v}:f?{cep:v,opts:f,sel:0}:{err:1};render()}
 function rm(i){CART().splice(i,1);save();render()}
 
-function checkout(){
+async function checkout(){if(checkout.b)return;checkout.b=1;try{await _checkout()}finally{checkout.b=0}}
+async function _checkout(){
  const g=id=>($(id)?$(id).value:'').trim();
  const c={name:g('#cn'),phone:g('#cp'),email:g('#ce').toLowerCase(),addr:g('#ca')};
  if(!CART().length)return alert('Carrinho vazio.');
@@ -93,8 +98,11 @@ function checkout(){
  const sh=ship.opts[ship.sel];
  const items=CART().map(i=>({key:i.key,name:item(i.key).name,price:item(i.key).price,qty:i.qty,size:i.size}));
  const sub=cartSub();
- const o={id:'BN'+(++S.seq),date:new Date().toLocaleString('pt-BR'),ts:Date.now(),customer:{...c,cep:ship.local?'':ship.cep},items,subtotal:sub,ship:sh,total:sub+sh.price,pay:$('#cpay').value,status:STATUS[0],tracking:'',stockDone:false,area:IMP?'importados':'moda'};
- S.orders.unshift(o);saveCustomer(c);S[CK]=[];ship=null;cdraft={};cartOpen=false;save();
+ const seq=FBM?await FB.nextSeq().catch(()=>null):++S.seq;
+ if(!seq)return alert('Não foi possível registrar o pedido agora. Tente de novo em instantes.');
+ const o={id:'BN'+seq,date:new Date().toLocaleString('pt-BR'),ts:Date.now(),customer:{...c,cep:ship.local?'':ship.cep},items,subtotal:sub,ship:sh,total:sub+sh.price,pay:$('#cpay').value,status:STATUS[0],tracking:'',stockDone:false,area:IMP?'importados':'moda'};
+ if(FBM){try{await FB.placeOrder(o,c)}catch(e){console.error(e);return alert('Não foi possível registrar o pedido agora. Tente de novo em instantes.')}}
+ S.orders.unshift(o);saveCustomer(c);if(FBM&&S.customer)S.customer.orderIds=[...new Set([...(S.customer.orderIds||[]),o.id])];S[CK]=[];ship=null;cdraft={};cartOpen=false;save();
  const wm=`Olá, ${OWNER}! O pedido *${o.id}* foi realizado.\n\nCliente: ${c.name}\n`+items.map(i=>`• ${i.qty}x ${i.name}${i.size?' ('+i.size+')':''} - ${money(i.price*i.qty)}`).join('\n')+`\n\n${sh.local?(retira?'*Retirada na loja*':'*'+sh.name+'*\nO valor da entrega é calculado na hora da entrega.'):'Frete '+sh.name+': '+money(sh.price)}\n*Total: ${money(o.total)}*${sh.local?' (sem frete)':''}\nForma de pagamento: ${o.pay}\n\n${retira?'Retirada: combinar com a loja':'Entrega: '+c.addr+(o.customer.cep?' (CEP '+o.customer.cep+')':'')}`;
  const txt=encodeURIComponent(wm);
  justOrdered=o.id;view='conta';render();scrollTo(0,0);
@@ -172,15 +180,18 @@ function loginFocus(){setTimeout(()=>{const e=$('#lq')||$('#lnm');if(e)e.focus()
 function openLogin(from){if(from==='cart')keepDraft();lfrom=from||'';lmode='find';lq='';lerr='';lnote='';lf={name:'',email:'',phone:''};modal='login';menu=false;if(from!=='cart')cartOpen=false;render();loginFocus()}
 function closeLogin(){modal='';lerr='';lnote='';render()}
 function setLmode(m){if(m==='new'&&lmode==='find'&&lq.trim()){const em=lq.includes('@');lf={name:lf.name,email:em?lq.trim().toLowerCase():lf.email,phone:em?lf.phone:lq.trim()}}lmode=m;lerr='';lnote='';render();loginFocus()}
-function loginDone(c){S.customer=c;save();const f=lfrom;modal='';lerr='';lnote='';lfrom='';if(f==='cart')render();else go('conta')}
-function doFind(){const c=findCustomer(lq);if(c)return loginDone(c);
+async function loginDone(c){S.customer=c;if(FBM){S.customers=[c];await loadMine()}save();const f=lfrom;modal='';lerr='';lnote='';lfrom='';if(f==='cart')render();else go('conta')}
+const rFind=async v=>FBM?(await FB.findCustomer(v).catch(()=>null)):findCustomer(v);
+async function loadMine(){if(!FBM||!S.customer||(FB.admin&&FB.loaded))return;try{S.orders=await FB.myOrders(S.customer)}catch(e){console.warn(e)}}
+function custLogout(){S.customer=null;if(FBM&&!FB.loaded)S.orders=[];save();render()}
+async function doFind(){const c=await rFind(lq);if(c)return loginDone(c);
  lf={name:'',email:lq.includes('@')?lq.trim().toLowerCase():'',phone:lq.includes('@')?'':lq.trim()};lmode='new';lerr='';lnote='Não encontramos esse cadastro. Crie o seu abaixo, é rapidinho.';render();loginFocus()}
-function doNew(){
+async function doNew(){
  const n=lf.name.trim(),e=lf.email.trim().toLowerCase(),p=lf.phone.trim();
  if(!n)return setLerr('Informe seu nome.');
  if(!/^\S+@\S+\.\S+$/.test(e))return setLerr('Informe um e-mail válido.');
  if(normPhone(p).length<10)return setLerr('Informe o WhatsApp com DDD.');
- const ex=findCustomer(e)||findCustomer(p);
+ const ex=(await rFind(e))||(await rFind(p));
  if(ex)return loginDone(ex);
  saveCustomer({name:n,email:e,phone:p});loginDone(S.customer)}
 function setLerr(m){lerr=m;render()}
@@ -216,9 +227,10 @@ function steps(o){
  const L=STATUS.slice(0,5),at=L.indexOf(o.status);
  return `<div class="steps">${L.map((x,i)=>`<span class="${i<=at?'on':''}">${x}</span>`).join('')}</div>`;
 }
-function findOrder(){
+async function findOrder(){
  const id=$('#ro').value.trim().toUpperCase(),em=$('#re').value.trim().toLowerCase();
- const o=S.orders.find(x=>x.id===id&&x.customer.email===em);
+ let o=S.orders.find(x=>x.id===id&&x.customer.email===em);
+ if(!o&&FBM&&id&&em){try{o=await FB.getOrder(id,em)}catch(e){o=null}}
  trk=o?{o}:{err:1};render();
 }
 function vRastreio(){
@@ -325,7 +337,16 @@ function vModal(){
  ${fs&&fs.opts?fs.opts.map(o=>`<div class="line"><span>${o.name} · ${o.days} dias úteis</span><span class="price">${money(o.price)}</span></div>`).join('')+`<p class="tag">${fs.opts[0].demo?'Valores de exemplo (modo de teste).':'Valores calculados pelo Melhor Envio.'} O valor final aparece no carrinho.</p>`:''}
  <div class="row"><button class="btn ghost" onclick="modal='';render()">Fechar</button></div></div></div>`;
 }
-function adminLogin(){if($('#pin').value==='1234'){adminOk=true;render()}else msg='PIN incorreto.',render()}
+async function adminLogin(){
+ if(!FBM){if($('#pin').value==='1234'){adminOk=true;render()}else msg='PIN incorreto.',render();return}
+ try{await FB.login($('#aem').value,$('#pin').value);await enterAdmin()}catch(e){msg=FB.errMsg(e)}
+ render();
+}
+async function enterAdmin(){
+ await FB.loadAdmin(S);adminOk=true;msg='';
+ FB.onerr=()=>toast('Não foi possível salvar na nuvem. Verifique a conexão.');
+ FB.listen(S,()=>{if(view==='admin'&&adminOk&&!modal)render()});
+}
 const ph=p=>`<div class="ph">${p.img?`<img src="${p.img}" alt="${esc(p.name)}">`:'B'}</div>`;
 
 /* Views */
@@ -349,7 +370,7 @@ function vConta(){
  const c=S.customer;
  if(!c)return `<section><div class="wrap" style="max-width:420px"><h2>Minha conta</h2><p class="sub">Entre ou crie seu cadastro para acompanhar seus pedidos.</p><div class="row"><button class="btn" onclick="openLogin('')">Entrar ou cadastrar</button></div></div></section>`;
  const os=S.orders.filter(o=>o.customer.email===c.email&&oArea(o)===(IMP?'importados':'moda'));
- return `<section><div class="wrap"><h2>Olá, ${esc(c.name)}</h2><p class="sub">${esc(c.email)} · <button class="btn sm ghost" onclick="S.customer=null;save();render()">Sair</button></p>
+ return `<section><div class="wrap"><h2>Olá, ${esc(c.name)}</h2><p class="sub">${esc(c.email)} · <button class="btn sm ghost" onclick="custLogout()">Sair</button></p>
  ${justOrdered?vOk(justOrdered):''}<h3 style="margin:20px 0 8px">Meus pedidos</h3>${os.length?os.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id}</b><span class="st">${o.status}</span></div><div class="tag">${o.date}</div>${o.items.map(i=>`<div class="line"><span>${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}<div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
  ${steps(o)}${trackBlock(o)}</div>`).join(''):'<div class="empty">Você ainda não fez pedidos.</div>'}</div></section>`;
 }
@@ -500,7 +521,7 @@ function saveCfg(){
 }
 function resetCfg(){if(!confirm('Voltar aos nomes e ao modelo originais deste painel?'))return;if(S.cfg)delete S.cfg[aarea];save();render();toast('Configurações restauradas.')}
 function vAdmin(){
- if(!adminOk)return `<section><div class="wrap plogin" style="max-width:380px"><span class="spark">✦ ✧ ✦</span><h2>Painel da loja</h2><p class="sub">Acesso da loja. PIN da prévia: 1234</p><input id="pin" type="password" placeholder="PIN" aria-label="PIN" autocomplete="off" onkeydown="if(event.key==='Enter')adminLogin()"><div class="row"><button class="btn" onclick="adminLogin()">Entrar</button></div><p class="err">${msg}</p></div></section>`;
+ if(!adminOk)return `<section><div class="wrap plogin" style="max-width:380px"><span class="spark">✦ ✧ ✦</span><h2>Painel da loja</h2>${FBM?`<p class="sub">Entre com o e-mail e a senha da loja.</p><input id="aem" type="email" value="${esc(EMAIL)}" placeholder="E-mail" aria-label="E-mail" autocomplete="username"><input id="pin" type="password" placeholder="Senha" aria-label="Senha" autocomplete="current-password" style="margin-top:10px" onkeydown="if(event.key==='Enter')adminLogin()">`:`<p class="sub">Acesso da loja. PIN da prévia: 1234</p><input id="pin" type="password" placeholder="PIN" aria-label="PIN" autocomplete="off" onkeydown="if(event.key==='Enter')adminLogin()">`}<div class="row"><button class="btn" onclick="adminLogin()">Entrar</button></div><p class="err">${msg}</p></div></section>`;
  if(!aarea)return '<section><div class="wrap" style="min-height:50vh"></div></section>';
  const pend=AO().filter(o=>o.status===STATUS[0]).length;
  let body='';
@@ -608,7 +629,7 @@ function render(){
  if(panel&&adminOk&&!modal)setTimeout(checkNew,0);
 }
 if(window.addEventListener)window.addEventListener('storage',e=>{
- if(e.key!==K||!e.newValue)return;
+ if(FBM||e.key!==K||!e.newValue)return;
  try{const old=S.orders.length;S=JSON.parse(e.newValue);if(view==='admin'&&adminOk&&S.orders.length!==old)render()}catch(_){}
 });
 (function(){
@@ -624,5 +645,23 @@ if(window.addEventListener)window.addEventListener('storage',e=>{
  if(P.get('p')){pid=P.get('p');view='produto'}
  else history.replaceState(null,'',location.pathname);
 })();
-render();
-if(pg){setTimeout(()=>{const e=document.getElementById(pg);if(e)e.scrollIntoView();pg=''},60)}
+async function boot(){
+ if(window.FB&&!window.STATIC_PAGE){
+  const msgBox=h=>{$('#app').innerHTML='<div style="min-height:60vh;display:grid;place-items:center;text-align:center;padding:24px;color:#9a8f7c;font-family:Jost,sans-serif">'+h+'</div>'};
+  msgBox('Carregando…');
+  await FB.ready;
+  if(!FB.on)return msgBox('<div>Não foi possível conectar agora.<br><br><button class="btn" onclick="location.reload()">Tentar de novo</button></div>');
+  try{
+   let ses={};try{ses=JSON.parse(localStorage.getItem(SK))||{}}catch(e){}
+   const d=await FB.loadPublic();
+   S={colls:[],products:d.products,combos:d.combos,orders:[],moves:[],shares:[],customers:[],cfg:{},goals:{},seen:[],seq:1000,cart:[],cartImp:[],customer:null,...ses};
+   if(d.pub){S.colls=d.pub.colls||[];S.cfg=d.pub.cfg||{}}
+   FBM=true;
+   if(S.customer){S.customers=[S.customer];await loadMine()}
+   if(view==='admin'&&FB.admin)await enterAdmin();
+  }catch(e){console.error(e);FBM=false;return msgBox('<div>Não foi possível carregar a loja agora.<br><br><button class="btn" onclick="location.reload()">Tentar de novo</button></div>')}
+ }
+ render();
+ if(pg){setTimeout(()=>{const e=document.getElementById(pg);if(e)e.scrollIntoView();pg=''},60)}
+}
+boot();

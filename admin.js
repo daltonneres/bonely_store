@@ -262,7 +262,7 @@ function shell(){
  <div class="a-main"><div class="a-mbar"><button class="a-ibtn" onclick="ADM.nav(true)" aria-label="Abrir menu">${i('menu')}</button><img class="a-mlogo" src="${LOGO}" alt="Bonely Store"><span></span></div>${demo}${top()}<div class="a-page">${({geral:pGeral,pedidos:pPed,produtos:pProd,estoque:pEst,combos:pCmb,planilhas:pPlan})[st.tab]()}</div></div>
  ${st.drawer?drawer():''}${st.modal?({prod:mProd,mv:mMv,cmb:mCmb})[st.modal.t]():''}</div>`;
 }
-const login=()=>`<div class="a-login"><form class="a-lc" onsubmit="ADM.enter(event)"><img src="${LOGO}" alt="Bonely Store"><h1>Olá, ${esc(OWNER)}</h1><p class="a-mut">Digite o PIN para abrir o painel da loja.</p><label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password"><button class="a-btn" type="submit">Entrar</button><p class="a-err" role="alert">${esc(st.msg)}</p><button type="button" class="a-link" onclick="ADM.exit()">Voltar para a loja</button><small class="a-mut">Prévia: o PIN é 1234</small></form></div>`;
+const login=()=>`<div class="a-login"><form class="a-lc" onsubmit="ADM.enter(event)"><img src="${LOGO}" alt="Bonely Store"><h1>Olá, ${esc(OWNER)}</h1>${FBM?`<p class="a-mut">Entre com o e-mail e a senha da loja.</p><label for="aem">E-mail</label><input id="aem" type="email" value="${esc(EMAIL)}" autocomplete="username" style="letter-spacing:normal;font-size:16px"><label for="pin">Senha</label><input id="pin" type="password" autocomplete="current-password" style="letter-spacing:normal;font-size:16px">`:`<p class="a-mut">Digite o PIN para abrir o painel da loja.</p><label for="pin">PIN</label><input id="pin" type="password" inputmode="numeric" autocomplete="current-password">`}<button class="a-btn" type="submit">Entrar</button><p class="a-err" role="alert">${esc(st.msg)}</p><button type="button" class="a-link" onclick="ADM.exit()">Voltar para a loja</button>${FBM?'':'<small class="a-mut">Prévia: o PIN é 1234</small>'}</form></div>`;
 function render(){
  const y=scrollY;Q=[];
  if(!adminOk){$('#app').innerHTML=login();document.body.style.overflow='';setTimeout(()=>{const e=$('#pin');e&&e.focus()},0);return}
@@ -293,8 +293,10 @@ function seed(){
 }
 const close=()=>{st.drawer=null;st.modal=null;st.img=null;render()};
 return{render,seed,close,csv,xlsx,
- enter(e){e.preventDefault();if($('#pin').value==='1234'){adminOk=true;st.msg='';render()}else{st.msg='PIN incorreto. Tente de novo.';render()}},
- logout(){adminOk=false;st.drawer=st.modal=null;st.nav=false;render()},
+ async enter(e){e.preventDefault();
+  if(FBM){try{await FB.login($('#aem').value,$('#pin').value);await enterAdmin();st.msg=''}catch(x){st.msg=FB.errMsg(x)}return render()}
+  if($('#pin').value==='1234'){adminOk=true;st.msg='';render()}else{st.msg='PIN incorreto. Tente de novo.';render()}},
+ async logout(){if(FBM){await FB.logout();location.reload();return}adminOk=false;st.drawer=st.modal=null;st.nav=false;render()},
  exit(){st.nav=false;view='loja';document.body.style.overflow='';window.render();scrollTo(0,0)},
  go(t,f){st.tab=t;st.q='';st.f=f||'';st.lim=25;st.nav=false;st.drawer=st.modal=null;render();scrollTo(0,0)},
  nav(v){st.nav=v;render()},days(n){st.days=n;render()},
