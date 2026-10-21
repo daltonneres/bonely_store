@@ -199,7 +199,7 @@ function vLogin(){
  const nw=lmode==='new';
  return `<div class="modal" onclick="if(event.target===this)closeLogin()"><div class="lgn" role="dialog" aria-modal="true" aria-labelledby="lt">
  <button class="lgx" onclick="closeLogin()" aria-label="Fechar">×</button>
- <span class="lgk">BONELY</span>
+ <span class="lgk">BONELY STORE</span>
  <h2 id="lt">${nw?'Criar cadastro':'Entrar'}</h2>
  <p class="lgs">${nw?'Leva menos de um minuto. Nos próximos pedidos a gente já preenche tudo para você.':'Digite seu e-mail ou WhatsApp para acessar seus dados e pedidos.'}</p>
  ${lnote?`<div class="lgnote">${esc(lnote)}</div>`:''}
@@ -337,9 +337,14 @@ function vModal(){
  ${fs&&fs.opts?fs.opts.map(o=>`<div class="line"><span>${o.name} · ${o.days} dias úteis</span><span class="price">${money(o.price)}</span></div>`).join('')+`<p class="tag">${fs.opts[0].demo?'Valores de exemplo (modo de teste).':'Valores calculados pelo Melhor Envio.'} O valor final aparece no carrinho.</p>`:''}
  <div class="row"><button class="btn ghost" onclick="modal='';render()">Fechar</button></div></div></div>`;
 }
+var aemv='';
+const EYE_ON='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',EYE_OFF='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.6 10.6 0 0 1 12 19c-6.4 0-10-7-10-7a18 18 0 0 1 4.1-4.9M9.9 5.2A9.7 9.7 0 0 1 12 5c6.4 0 10 7 10 7a18 18 0 0 1-2.2 3.2M1 1l22 22"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+function togglePw(){const p=$('#pin'),b=$('.pwb');if(!p)return;const h=p.type==='password';p.type=h?'text':'password';b.innerHTML=h?EYE_OFF:EYE_ON;const t=h?'Ocultar senha':'Mostrar senha';b.setAttribute('aria-label',t);b.title=t;p.focus()}
 async function adminLogin(){
+ if(FBM){const a=$('#aem');aemv=a?a.value.trim():''}
  if(!FBM){if($('#pin').value==='1234'){adminOk=true;render()}else msg='PIN incorreto.',render();return}
- try{await FB.login($('#aem').value,$('#pin').value);await enterAdmin()}catch(e){msg=FB.errMsg(e)}
+ if(!aemv||!$('#pin').value){msg='Preencha o e-mail e a senha.';render();return}
+ try{await FB.login(aemv,$('#pin').value);await enterAdmin();msg='';aemv=''}catch(e){msg=FB.errMsg(e)}
  render();
 }
 async function enterAdmin(){
@@ -472,7 +477,7 @@ function vNewOrder(){
 }
 function vPanelHead(){
  const gi=goalInfo();
- return `<header><div class="wrap phd"><button class="brand" onclick="go('loja')" aria-label="Ir para a loja">BONELY<span class="sub2">PAINEL${adminOk&&aarea?' · '+AREAS[aarea].name.toUpperCase():''}</span></button><div class="row" style="margin:0">${adminOk&&aarea?`<button class="btn sm" onclick="apick=true;render()">Trocar painel</button>`:''}<button class="btn sm ghost" onclick="go('loja')">Ver loja</button>${adminOk?`<button class="btn sm ghost" onclick="adminOk=false;go('loja')">Sair</button>`:''}</div></div></header>
+ return `<header><div class="wrap phd"><button class="brand" onclick="go('loja')" aria-label="Ir para a loja">BONELY STORE<span class="sub2">PAINEL${adminOk&&aarea?' · '+AREAS[aarea].name.toUpperCase():''}</span></button><div class="row" style="margin:0">${adminOk&&aarea?`<button class="btn sm" onclick="apick=true;render()">Trocar painel</button>`:''}<button class="btn sm ghost" onclick="go('loja')">Ver loja</button>${adminOk?`<button class="btn sm ghost" onclick="adminOk=false;go('loja')">Sair</button>`:''}</div></div></header>
  ${adminOk&&aarea?`<div class="welcome"><div class="wrap"><h1 class="serif">Olá, ${OWNER_FULL}</h1><p>Painel ${AREAS[aarea].name}. ${greet()}!</p><p class="meta">${gi.g?`Sua meta do mês está em <b>${gi.pct}%</b> (${money(gi.m)} de ${money(gi.g)}).`:'Você ainda não definiu a meta do mês. Defina na aba Vendas.'}</p>${gi.g?`<div class="prog"><i style="width:${Math.min(100,gi.pct)}%"></i></div>`:''}</div></div>`:''}`;
 }
 /* ---- configuração do cadastro de produto (por painel) ---- */
@@ -521,7 +526,7 @@ function saveCfg(){
 }
 function resetCfg(){if(!confirm('Voltar aos nomes e ao modelo originais deste painel?'))return;if(S.cfg)delete S.cfg[aarea];save();render();toast('Configurações restauradas.')}
 function vAdmin(){
- if(!adminOk)return `<section><div class="wrap plogin" style="max-width:380px"><span class="spark">✦ ✧ ✦</span><h2>Painel da loja</h2>${FBM?`<p class="sub">Entre com o e-mail e a senha da loja.</p><input id="aem" type="email" value="${esc(EMAIL)}" placeholder="E-mail" aria-label="E-mail" autocomplete="username"><input id="pin" type="password" placeholder="Senha" aria-label="Senha" autocomplete="current-password" style="margin-top:10px" onkeydown="if(event.key==='Enter')adminLogin()">`:`<p class="sub">Acesso da loja. PIN da prévia: 1234</p><input id="pin" type="password" placeholder="PIN" aria-label="PIN" autocomplete="off" onkeydown="if(event.key==='Enter')adminLogin()">`}<div class="row"><button class="btn" onclick="adminLogin()">Entrar</button></div><p class="err">${msg}</p></div></section>`;
+ if(!adminOk)return `<section><div class="wrap plogin" style="max-width:380px"><h2>Painel da loja</h2><p class="sub">${FBM?'Entre com o e-mail e a senha da loja.':'Digite o PIN para entrar.'}</p><form onsubmit="event.preventDefault();adminLogin()" novalidate>${FBM?`<input id="aem" type="email" value="${esc(aemv)}" placeholder="E-mail" aria-label="E-mail" autocomplete="username">`:''}<div class="pw"><input id="pin" type="password" placeholder="${FBM?'Senha':'PIN'}" aria-label="${FBM?'Senha':'PIN'}" autocomplete="current-password"${FBM?'':' inputmode="numeric"'}><button type="button" class="pwb" onclick="togglePw()" aria-label="Mostrar senha" title="Mostrar senha"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div><button class="btn" type="submit">Entrar</button></form><p class="err" role="alert">${msg}</p><a class="fgt" href="https://wa.me/5546999711937?text=${encodeURIComponent('Olá! Esqueci a senha do painel da Bonely Store. Pode me ajudar?')}" target="_blank" rel="noopener">Esqueci a senha</a>${FBM?'':'<small class="tag">PIN da prévia: 1234</small>'}</div></section>`;
  if(!aarea)return '<section><div class="wrap" style="min-height:50vh"></div></section>';
  const pend=AO().filter(o=>o.status===STATUS[0]).length;
  let body='';
@@ -620,7 +625,7 @@ function render(){
  document.body.classList.toggle('is-panel',panel);
  $('#app').innerHTML=`${panel?vPanelHead():`<header><div class="wrap hd">
  <button class="iconbtn" onclick="menu=true;render()" aria-label="Abrir menu">${IC.menu}</button>
- <button class="brand" onclick="q='';go('loja')" aria-label="Bonely Store, início">BONELY${SEC==='importados'?'<span class="sub2">IMPORTADOS</span>':''}</button>
+ <button class="brand" onclick="q='';go('loja')" aria-label="Bonely Store, início">BONELY STORE${SEC==='importados'?'<span class="sep"><i>|</i><b>IMPORTADOS</b></span>':''}</button>
  <form class="search" onsubmit="doSearch(event)"><input id="q" value="${esc(q)}" placeholder="Digite o que você procura" aria-label="Buscar produtos"><button aria-label="Buscar">${IC.search}</button></form>
  <a class="hbox central" href="https://wa.me/${WA}" target="_blank" rel="noopener">${IC.head}<span><small>Central de</small>Atendimento</span></a>
  <button class="hbox" onclick="${acct()}">${IC.user}<span><small>${cu?'Olá, '+esc(cu.name.split(' ')[0]):'Olá, Bem-vindo(a)'}</small>${cu?'Minha conta':'Entre ou Cadastre-se'}</span></button>
