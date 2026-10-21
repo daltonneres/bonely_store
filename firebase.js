@@ -92,6 +92,11 @@ FB.login=async(email,pw)=>{
   setUser(r.user);
   if(!FB.admin){await U.signOut(auth);setUser(null);throw new Error('not-admin')}
 };
+FB.confirmPw=async pw=>{
+  const u=auth.currentUser;
+  if(!FB.admin||!u)throw new Error('not-admin');
+  await U.reauthenticateWithCredential(u,U.EmailAuthProvider.credential(u.email,String(pw||'')));
+};
 FB.logout=async()=>{try{await U.signOut(auth)}catch(e){}setUser(null);FB.loaded=false};
 FB.loadAdmin=async S=>{
   const names=[...SYNC,'customers'];

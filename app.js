@@ -409,6 +409,33 @@ function setStatus(id,st){
  }
  _setStatus(id,st);
 }
+/* Excluir pedido: pede confirmação e a senha do painel */
+var delId=null,delErr='',delBusy=false;
+const delFocus=()=>setTimeout(()=>{const e=$('#dpw');e&&e.focus()},40);
+function askDelOrder(id){delId=id;delErr='';delBusy=false;modal='delorder';render();delFocus()}
+function closeDel(){delId=null;delErr='';delBusy=false;modal='';render()}
+const delBack=o=>!!(o&&o.stockDone&&!o.sample&&['Pago','Separando'].includes(o.status));
+function vDelOrder(){
+ const o=S.orders.find(x=>x.id===delId);if(!o)return '';
+ return `<div class="modal" onclick="if(event.target===this)closeDel()"><div role="alertdialog" aria-modal="true" aria-labelledby="dlt" style="width:min(460px,100%)"><form onsubmit="event.preventDefault();confirmDelOrder()" novalidate><span class="st" data-s="Cancelado">Ação sem volta</span><h2 id="dlt" style="margin-top:8px">Excluir o pedido ${esc(o.id)}?</h2>
+ <p class="tag" style="margin:8px 0 14px">Tem certeza? O pedido será apagado de vez e não poderá ser recuperado.${delBack(o)?' As peças dele voltam para o estoque.':''}</p>
+ <div class="line"><span>Cliente</span><span>${esc(o.customer.name)}</span></div><div class="line"><span>Status</span><span>${esc(o.status)}</span></div><div class="line"><span>Total</span><span>${money(o.total)}</span></div>
+ <label for="dpw">${FBM?'Digite a senha do painel para confirmar':'Digite o PIN para confirmar'}</label><input id="dpw" type="password" autocomplete="current-password"${FBM?'':' inputmode="numeric"'}>
+ <p class="err" role="alert" style="min-height:1.4em;margin:10px 0 0">${esc(delErr)}</p>
+ <div class="row" style="justify-content:flex-end;margin-top:12px"><button type="button" class="btn ghost" onclick="closeDel()">Cancelar</button><button class="btn danger" type="submit"${delBusy?' disabled':''}>Excluir definitivamente</button></div></form></div></div>`;
+}
+async function confirmDelOrder(){
+ if(delBusy)return;
+ const o=S.orders.find(x=>x.id===delId);if(!o)return closeDel();
+ const pw=($('#dpw')||{}).value||'';
+ if(!pw){delErr='Digite a senha para excluir.';render();delFocus();return}
+ delBusy=true;
+ try{if(FBM)await FB.confirmPw(pw);else if(pw!=='1234')throw new Error('bad-pw')}
+ catch(e){delBusy=false;const c=String(e&&e.code||e&&e.message||'');delErr=/too-many|network/.test(c)?FB.errMsg(e):'Senha incorreta. O pedido não foi excluído.';render();delFocus();return}
+ if(delBack(o))o.items.forEach(i=>orderProds(i).forEach(p=>{if(p){p.stock+=i.qty;S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:'entrada',qty:i.qty,note:'Exclusão do pedido '+o.id,area:isImpP(p)?'importados':'moda'})}}));
+ S.orders=S.orders.filter(x=>x.id!==o.id);
+ delId=null;delBusy=false;modal='';save();render();toast('Pedido '+o.id+' excluído.');
+}
 /* Painel separado: Moda x Importados. Nada se mistura. */
 const AREAS={moda:{name:'Moda',desc:'Roupas femininas e masculinas, combos e coleções.'},importados:{name:'Importados',desc:'Produtos importados, entrega regional ou retirada.'}};
 const isImpP=p=>!!p&&p.type==='avulso';
@@ -560,7 +587,7 @@ function vAdmin(){
   const l=AO().filter(o=>(ofil==='Todos'||o.status===ofil)&&(!k||o.id.toLowerCase().includes(k)||o.customer.name.toLowerCase().includes(k)));
   body=`<div class="pills">${['Todos',...STATUS].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?AO().length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
   ${l.length?l.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id} · ${esc(o.customer.name)}</b><span class="st" data-s="${o.status}">${o.status}</span></div><div class="tag">${o.date} · ${esc(o.customer.phone)} · ${esc(o.customer.addr)} · CEP ${esc(o.customer.cep)}</div>${o.items.map(i=>`<div class="tag">${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</div>`).join('')}<div class="price">${money(o.total)} <span class="tag">(frete ${esc(o.ship.name)} ${money(o.ship.price)}) · Pagamento: ${esc(o.pay||'a combinar')}</span></div>
-  <div class="row">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select><input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}</div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
+  <div class="row">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select><input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
  }
  if(atab==='combos'){
   const l=AP().filter(p=>aMatch(p)||cbSel.includes(p.id));
@@ -630,7 +657,7 @@ function render(){
  <a class="hbox central" href="https://wa.me/${WA}" target="_blank" rel="noopener">${IC.head}<span><small>Central de</small>Atendimento</span></a>
  <button class="hbox" onclick="${acct()}">${IC.user}<span><small>${cu?'Olá, '+esc(cu.name.split(' ')[0]):'Olá, Bem-vindo(a)'}</small>${cu?'Minha conta':'Entre ou Cadastre-se'}</span></button>
  <button class="cartbtn" onclick="cartOpen=true;render()" aria-label="Carrinho, ${n} itens">${IC.cart}${n?`<b>${n}</b>`:''}</button></div></header>`}
- <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel?'':vFooter()}${vCart()}${vMenu()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><a class="fab wa" href="https://wa.me/${WA}" target="_blank" rel="noopener" aria-label="WhatsApp">${IC.wa}</a></div>`}`;
+ <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel?'':vFooter()}${vCart()}${vMenu()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><a class="fab wa" href="https://wa.me/${WA}" target="_blank" rel="noopener" aria-label="WhatsApp">${IC.wa}</a></div>`}`;
  if(panel&&adminOk&&!modal)setTimeout(checkNew,0);
 }
 if(window.addEventListener)window.addEventListener('storage',e=>{
