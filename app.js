@@ -150,9 +150,51 @@ function readImg(file,cb){
  const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,600/im.width),c=document.createElement('canvas');c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);cb(c.toDataURL('image/jpeg',.7))};im.src=r.result};r.readAsDataURL(file);
 }
 let newImg='';
+
+/* ---- várias fotos por produto (frente, verso...) ---- */
+const MAXIMG=5;
+const pimgs=p=>Array.isArray(p&&p.imgs)&&p.imgs.length?p.imgs:(p&&p.img?[p.img]:[]);
+let imgDraft=null;
+const imgKey=()=>String(aedit||'new');
+function curImgs(){
+ if(!imgDraft||imgDraft.key!==imgKey()){const ep=aedit?S.products.find(x=>x.id==aedit):null;imgDraft={key:imgKey(),list:ep?[...pimgs(ep)]:[]}}
+ return imgDraft.list;
+}
+function imgThumbs(){
+ return curImgs().map((u,i)=>`<span class="ith"><img src="${u}" alt="Foto ${i+1}">${i===0?'<em>Capa</em>':`<button type="button" class="ic" onclick="imgCover(${i})" title="Tornar capa" aria-label="Tornar a foto ${i+1} a capa">★</button>`}<button type="button" class="ix" onclick="imgDel(${i})" aria-label="Remover foto ${i+1}">×</button></span>`).join('');
+}
+const imgNote=()=>{const n=curImgs().length;return n?n+' de '+MAXIMG+' fotos. A primeira é a capa.':''};
+function imgRefresh(){const b=$('#imgl'),t=$('#imgok');if(b)b.innerHTML=imgThumbs();if(t)t.textContent=imgNote()}
+function imgDel(i){curImgs().splice(i,1);imgRefresh()}
+function imgCover(i){const l=curImgs(),x=l.splice(i,1)[0];l.unshift(x);imgRefresh()}
+async function pickImgs(el){
+ const l=curImgs(),files=[...el.files];el.value='';
+ for(const f of files){
+  if(l.length>=MAXIMG){alert('Máximo de '+MAXIMG+' fotos por produto.');break}
+  const d=await new Promise(ok=>readImg(f,ok));
+  if(l.reduce((a,x)=>a+x.length,0)+d.length>850000){alert('As fotos ficaram pesadas demais. Remova alguma ou use fotos menores.');break}
+  l.push(d);
+ }
+ imgRefresh();
+}
+/* galeria na página do produto: passa sozinha a cada 5s e tem setinhas */
+const galD={},galI={};let galT=0,galX=0;
+function gallery(p){
+ const l=pimgs(p);if(l.length<2)return ph(p);
+ galD[p.id]=l;const i=Math.min(galI[p.id]||0,l.length-1);
+ return `<div class="gal" data-id="${p.id}" ontouchstart="galX=event.touches[0].clientX" ontouchend="galSw(event,${p.id})"><div class="ph"><img id="galimg" src="${l[i]}" alt="${esc(p.name)}" onload="galStart()"></div><button type="button" class="gnav gp" onclick="galGo(${p.id},-1)" aria-label="Foto anterior">‹</button><button type="button" class="gnav gn" onclick="galGo(${p.id},1)" aria-label="Próxima foto">›</button><div class="gdots">${l.map((_,k)=>`<i class="${k===i?'on':''}" onclick="galSet(${p.id},${k})"></i>`).join('')}</div></div>`;
+}
+function galStart(){clearInterval(galT);galT=setInterval(()=>{const g=document.querySelector('.gal');if(!g){clearInterval(galT);return}galGo(+g.dataset.id,1)},5000)}
+function galSet(id,k){
+ const l=galD[id];if(!l)return;galI[id]=k;
+ const im=$('#galimg');if(im){im.classList.add('gf');setTimeout(()=>{im.src=l[k];im.classList.remove('gf')},150)}
+ document.querySelectorAll('.gal .gdots i').forEach((d,j)=>d.classList.toggle('on',j===k));galStart();
+}
+function galGo(id,d){const l=galD[id];if(!l)return;galSet(id,((galI[id]||0)+d+l.length)%l.length)}
+function galSw(e,id){const dx=e.changedTouches[0].clientX-galX;if(Math.abs(dx)>40)galGo(id,dx<0?1:-1)}
 function pickImg(e){if(e.files[0])readImg(e.files[0],d=>{newImg=d;$('#imgok').textContent='Foto carregada ✓'})}
-function editProd(id){aedit=id;newImg='';render();scrollTo(0,0)}
-function cancelEdit(){aedit=null;pform=false;newImg='';render()}
+function editProd(id){aedit=id;newImg='';imgDraft=null;render();scrollTo(0,0)}
+function cancelEdit(){aedit=null;pform=false;newImg='';imgDraft=null;render()}
 function addProd(){
  const n=$('#pn').value.trim(),pr=parseFloat($('#pp').value);
  if(!n||isNaN(pr))return alert('Informe nome e preço.');
@@ -170,11 +212,11 @@ function addProd(){
  if(aedit){const p=epr;if(p){
    if(hasGrid&&!hasStk(p)&&p.stock>0&&!sumOf(newStk)&&!confirm('Nenhum tamanho está com estoque informado. As '+p.stock+' peças deste produto serão zeradas. Continuar?'))return;
    if(hasGrid)applyStk(p,newStk,'Ajuste no cadastro');
-   Object.assign(p,d);if(newImg)p.img=newImg}
-  aedit=null;pform=false;newImg='';save();render();toast('Produto salvo.');return}
- S.products.push({id:Date.now(),type:$('#pt').value,...d,stk:newStk,stock:sumOf(newStk),img:newImg});
+   Object.assign(p,d);{const L=curImgs();p.imgs=[...L];p.img=L[0]||''}}
+  aedit=null;pform=false;newImg='';imgDraft=null;save();render();toast('Produto salvo.');return}
+ S.products.push({id:Date.now(),type:$('#pt').value,...d,stk:newStk,stock:sumOf(newStk),imgs:[...curImgs()],img:curImgs()[0]||''});
  Object.keys(newStk).forEach(x=>{if(newStk[x]>0)S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:n,size:x,type:'entrada',qty:newStk[x],note:'Cadastro inicial',area:aarea})});
- pform=false;newImg='';save();render();toast('Produto salvo.');
+ pform=false;newImg='';imgDraft=null;save();render();toast('Produto salvo.');
 }
 function delProd(id){if(confirm('Excluir produto?')){if(aedit===id)aedit=null;S.products=S.products.filter(p=>p.id!==id);save();render()}}
 async function addMove(){
@@ -369,7 +411,7 @@ function vProduto(){
  if(!p)return `<section><div class="wrap"><h2>Produto não encontrado</h2><p class="sub">Esse link pode estar desatualizado.</p><button class="btn" onclick="go('loja')">Ver catálogo</button></div></section>`;
  const imp=p.type==='avulso';
  return `<section><div class="wrap"><p class="backrow"><button class="backbtn" onclick="go('loja')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Voltar ao catálogo</button></p>
- <div class="pdp"><div class="card">${ph(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.kind,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${money(p.price)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
+ <div class="pdp"><div class="card">${gallery(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.kind,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${money(p.price)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
  ${p.stock>0?`<label>${esc(optName(p))}</label><select id="sz${p.id}">${sizeOpts(p)}</select>${lowTag(p)}<div class="row"><button class="btn" onclick="addCart(${p.id})">Adicionar ao carrinho</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`:`<div class="tag err">Esgotado</div><div class="row"><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`}</div></div></div></section>`;
 }
 function updPrev(){const p=curShareProd(),e=$('#amsg');if(p&&e)e.innerHTML=fmtWA(shareMsg(p,asn.trim(),1))}
@@ -503,7 +545,7 @@ const ordersOf=a=>S.orders.filter(o=>oArea(o)===a);
 const prodsOf=a=>S.products.filter(p=>(a==='importados')===isImpP(p));
 const AO=()=>ordersOf(aarea),AP=()=>prodsOf(aarea),AM=()=>S.moves.filter(m=>mArea(m)===aarea),AC=()=>aarea==='moda'?S.combos:[];
 const goalVal=()=>+((S.goals&&S.goals[aarea])||(aarea==='moda'?S.goal:0))||0;
-function setArea(a){aarea=a;apick=false;aedit=null;aq='';ofil='Todos';cbSel=[];if(a==='importados'&&atab==='combos')atab='produtos';render();scrollTo(0,0)}
+function setArea(a){imgDraft=null;aarea=a;apick=false;aedit=null;aq='';ofil='Todos';cbSel=[];if(a==='importados'&&atab==='combos')atab='produtos';render();scrollTo(0,0)}
 const AIC={moda:'<path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>',importados:'<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>'};
 function vAreaModal(){
  const card=a=>{const o=ordersOf(a),todo=o.filter(x=>x.status==='Pago'||x.status==='Separando').length,aw=o.filter(x=>x.status===STATUS[0]).length,n=prodsOf(a).length;
@@ -785,7 +827,7 @@ function prodForm(ep){
  +(on('desc')?`<label>${L('desc')}</label><textarea id="pd" rows="4" placeholder="Conte sobre o produto: modelo, caimento, cuidados...">${esc(ep?ep.desc:'')}</textarea>`:'')
  +(on('specs')?`<label>${L('specs')}</label><textarea id="px" rows="6" spellcheck="false">${esc(ep&&String(ep.specs||'').trim()?ep.specs:SPEC_TPL())}</textarea><p class="hint">Complete depois dos dois pontos. Linha sem preenchimento não aparece na loja.</p>`:'')
  +(['brand','desc','specs'].some(on)?'</div></details>':'')
- +(on('img')?`<label>${L('img')}</label>${ep&&ep.img?'<div class="tag">Já tem foto. Escolha outra só se quiser trocar.</div>':''}<input type="file" accept="image/*" onchange="pickImg(this)"><span id="imgok" class="tag"></span>`:'')
+ +(on('img')?`<label>${L('img')}</label><input type="file" accept="image/*" multiple onchange="pickImgs(this)"><div class="imgl" id="imgl">${imgThumbs()}</div><span id="imgok" class="tag">${imgNote()}</span><p class="hint">Dá para anexar mais de uma foto (frente, verso...). Na loja elas passam sozinhas a cada 5 segundos e também têm setinhas.</p>`:'')
  +`<div class="row"><button class="btn" onclick="addProd()">${ep?'Salvar alterações':'Salvar produto'}</button><button class="btn ghost" onclick="cancelEdit()">Cancelar</button></div>`;
 }
 function vConfig(){
@@ -869,7 +911,7 @@ function vAdmin(){
  }
  if(atab==='config')body=vConfig();
  if(atab==='compartilhados')body=vShareAdmin();
- return `<section><div class="wrap"><div class="tabs" style="margin-top:0">${ATABS().map(([k,l])=>`<button class="${atab===k?'on':''}" onclick="atab='${k}';aq='';aedit=null;pform=false;render()">${l}${k==='pedidos'&&pend?' ('+pend+')':''}</button>`).join('')}</div>${body}</div></section>
+ return `<section><div class="wrap"><div class="tabs" style="margin-top:0">${ATABS().map(([k,l])=>`<button class="${atab===k?'on':''}" onclick="atab='${k}';aq='';aedit=null;pform=false;imgDraft=null;render()">${l}${k==='pedidos'&&pend?' ('+pend+')':''}</button>`).join('')}</div>${body}</div></section>
 `;
 }
 function vCart(){
