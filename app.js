@@ -36,7 +36,7 @@ const save=()=>{
 const $=s=>document.querySelector(s);
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='',pid=null,shareId=null,asp=null,asn='',asw='',aq='',ofil='Todos',vper='14d',cbSel=[],cbName='',cbPrice='',newQ=[],cdraft={},aarea=null,apick=false,aedit=null,justOrdered=null,trkPre=null;
+let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='',pid=null,shareId=null,asp=null,asn='',asw='',aq='',ofil='Todos',vper='14d',cbSel=[],cbName='',cbPrice='',newQ=[],cdraft={},kindF='',aarea=null,apick=false,aedit=null,justOrdered=null,trkPre=null;
 
 /* Camada de dados: com firebase.js carregado, a loja lê do Firestore e o painel grava nele (save() -> FB.queue). Sem ele, cai no localStorage (prévia). */
 
@@ -293,17 +293,19 @@ function vRastreio(){
  <h3 style="margin-top:34px">Já tem o código dos Correios?</h3><p class="tag">Digite o código e abrimos a consulta de entrega em outra aba. O trajeto da encomenda aparece no site dos Correios, não aqui.</p>
  <div class="row"><input id="rc" placeholder="Ex.: AA123456789BR" aria-label="Código de rastreio"><button class="btn ghost" onclick="const c=$('#rc').value.trim();if(c)window.open('https://www.melhorrastreio.com.br/rastreio/'+encodeURIComponent(c),'_blank')">Rastrear</button></div></div></section>`;
 }
-function match(p){
- if(q&&!p.name.toLowerCase().includes(q.toLowerCase()))return false;
- if(SEC==='importados')return p.type==='avulso';
- if(p.type==='avulso')return false;
- if(collF&&p.coll!==collF)return false;
- if(filter==='tudo')return true;
- const g=p.gen||'Unissex';
- return g===filter||g==='Unissex';
+function match(p,nk){
+ if(q&&![p.name,p.kind,p.brand].filter(Boolean).join(' ').toLowerCase().includes(q.toLowerCase()))return false;
+ if((SEC==='importados')!==(p.type==='avulso'))return false;
+ if(SEC!=='importados'){
+  if(collF&&p.coll!==collF)return false;
+  const g=p.gen||'Unissex';
+  if(filter!=='tudo'&&g!==filter&&g!=='Unissex')return false;
+ }
+ if(!nk){if(kindF==='__none')return !p.kind;if(kindF&&p.kind!==kindF)return false}
+ return true;
 }
 function cat(f,col){if(SEC==='importados'&&(f==='Feminino'||f==='Masculino'||col)){location.href=pageUrl('index')+'?'+new URLSearchParams({v:'loja',f:f,c:col||'',g:'cat'});return}
- clearUrl();pg='cat';filter=f;collF=col||'';view='loja';cartOpen=false;menu=false;render();setTimeout(()=>{const e=document.getElementById('cat');if(e)e.scrollIntoView({behavior:'smooth'})},30)}
+ clearUrl();pg='cat';filter=f;collF=col||'';kindF='';view='loja';cartOpen=false;menu=false;render();setTimeout(()=>{const e=document.getElementById('cat');if(e)e.scrollIntoView({behavior:'smooth'})},30)}
 function goto(id){pg=id;view='loja';cartOpen=false;menu=false;render();setTimeout(()=>{const e=document.getElementById(id);if(e)e.scrollIntoView({behavior:'smooth'})},30)}
 function doSearch(e){e.preventDefault();q=$('#q').value.trim();cat('tudo')}
 function vMenu(){
@@ -409,18 +411,21 @@ const ph=p=>`<div class="ph">${p.img?`<img src="${p.img}" alt="${esc(p.name)}">`
 function vCatsImp(){return `<nav class="cats" aria-label="Lojas"><div class="wrap"><button class="ctile imp" onclick="document.getElementById('cat').scrollIntoView({behavior:'smooth'})"><b>Importados</b><small>Você está aqui. Ver produtos</small><span aria-hidden="true">↓</span></button><a href="${pageUrl('index')}" class="ctile"><b>Moda</b><small>Feminino e masculino</small><span aria-hidden="true">→</span></a></div></nav>`}
 function vCats(){const T=(k,t,s,h)=>`<${h?'a href="'+h+'"':'button onclick="'+k+'"'} class="ctile${h?' imp':''}"><b>${t}</b><small>${s}</small><span aria-hidden="true">→</span></${h?'a':'button'}>`;
  return `<nav class="cats" aria-label="Categorias"><div class="wrap">${T("q='';cat('Feminino')",'Feminino','Moda feminina')}${T("q='';cat('Masculino')",'Masculino','Moda masculina')}${S.combos.length?T("goto('combos')",'Combos','Leve junto, pague menos'):''}${T('','Importados','Entrega na região ou retirada',pageUrl('importados'))}</div></nav>`}
+let KS=[];
+function kindBar(){const pool=S.products.filter(p=>match(p,1)),ks=[...new Set(pool.map(x=>x.kind).filter(Boolean))],sem=pool.some(x=>!x.kind);KS=ks;if(!ks.length)return '';
+ return `<div class="pills impf"><button class="${!kindF?'on':''}" onclick="kindF='';render()">Todos</button>${ks.map((k,i)=>`<button class="${kindF===k?'on':''}" onclick="kindF=KS[${i}];render()">${esc(k)}</button>`).join('')}${sem?`<button class="${kindF==='__none'?'on':''}" onclick="kindF='__none';render()">Outros</button>`:''}</div>`}
 function vLoja(){
- const list=S.products.filter(match);
- return `${SEC==='importados'?`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><h1 class="imp">IMPORTADOS</h1><p>Produtos importados selecionados pela Bonely Store, com entrega na região ou retirada.</p></div></section>`:`<section class="hero"><div class="wrap"><img class="herologo" src="${LOGO}" alt="Bonely Store"><p>Moda feminina, masculina e peças especiais, com envio para todo o Brasil.</p></div></section>`}
+ const list=S.products.filter(p=>match(p));
+ return `${SEC==='importados'?`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><h1 class="imp">IMPORTADOS</h1><p>Produtos importados selecionados pela Bonely Store, com entrega na região ou retirada.</p></div></section>`:`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><img class="herologo" src="${LOGO}" alt="Bonely Store"><p>Moda feminina, masculina e peças especiais, com envio para todo o Brasil.</p></div></section>`}
  ${SEC==='importados'?vCatsImp():vCats()}
  <div class="benefits"><div class="wrap">${BEN.map(b=>`<div class="ben">${IC[b[0]]}<span><b>${b[1]}</b>${b[2]}</span></div>`).join('')}</div></div>
  <section id="cat"><div class="wrap"><h2>${SEC==='importados'?'Importados':'Catálogo'}</h2><p class="sub">${q?`Resultados para “${esc(q)}” <button class="btn sm ghost" onclick="q='';render()">Limpar busca</button>`:(SEC==='importados'?'Produtos importados selecionados.':'Moda feminina e masculina.')}</p>
- ${SEC==='importados'?'':`<div class="pills">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';render()">${l}</button>`).join('')}</div>
- ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];render()">${esc(c)}</button>`).join('')}</div>`:''}`}
- ${list.length?`<div class="grid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${money(p.price)}</div>
+ ${IMP?kindBar():`<div class="pills impf">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';kindF='';render()">${l}</button>`).join('')}</div>${kindBar()}
+ ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';kindF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];kindF='';render()">${esc(c)}</button>`).join('')}</div>`:''}`}
+ ${list.length?`<p class="impcount">${list.length} ${list.length===1?(IMP?'produto':'peça'):(IMP?'produtos':'peças')}</p><div class="grid impgrid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><span class="cbadge">${esc(p.kind||(IMP?'Importado':p.gen)||'Moda')}</span><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${money(p.price)}</div>
   ${p.stock>0?`<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${sizeOpts(p)}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${lowTag(p)}`:'<div class="tag err">Esgotado</div>'}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
  </div></section>
- ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
+ ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid impgrid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
 }
 function vConta(){
  const c=S.customer;
@@ -540,9 +545,54 @@ function seedSales(){
  S.orders.sort((a,b)=>oTs(b)-oTs(a));save();render();
 }
 function clearSales(){S.orders=S.orders.filter(o=>!(o.sample&&oArea(o)===aarea));save();render()}
+/* ---- Prazo de 12h para confirmar + alertas do painel ---- */
+const LOW=4,CONF_H=12,dueOf=o=>oTs(o)+CONF_H*36e5,pendConf=o=>!o.sample&&!o.store&&o.status===STATUS[0];
+const fmtDur=ms=>{ms=Math.abs(ms);const h=Math.floor(ms/36e5),m=Math.floor(ms%36e5/6e4);return h?h+'h '+(m<10?'0':'')+m+'min':Math.max(m,1)+'min'};
+const fmtDue=o=>new Date(dueOf(o)).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+function dlBadge(o){if(!pendConf(o))return '';const ms=dueOf(o)-Date.now();return ms<=0?`<span class="dl late">Prazo vencido há ${fmtDur(ms)}</span>`:`<span class="dl${ms<2*36e5?' warn':''}">Confirmar em ${fmtDur(ms)}</span>`}
+let lowQ=[],dueQ=[],dueAck=[];
+const lowAck=()=>{try{return JSON.parse(localStorage.getItem('bn_lowack')||'[]')}catch(e){return []}};
+function lowList(){
+ return S.products.map(p=>{
+  const tot=+p.stock||0;
+  if(tot>LOW)return null;
+  const det=hasStk(p)?szOf(p).map(x=>x+' ('+stkQ(p,x)+')'):[];
+  return{key:p.id+'|'+tot+'|'+det.join(','),id:p.id,name:p.name,tot,det,area:isImpP(p)?'importados':'moda'};
+ }).filter(Boolean);
+}
+const dueList=()=>S.orders.filter(o=>pendConf(o)&&dueOf(o)-Date.now()<2*36e5);
 function checkNew(){
+ if(!(view==='admin'&&adminOk&&aarea&&!apick&&!modal))return;
  const seen=S.seen||[],n=S.orders.filter(o=>!seen.includes(o.id));
- if(n.length&&view==='admin'&&adminOk&&aarea&&!apick&&!modal){newQ=n.map(o=>o.id);modal='neworder';render()}
+ if(n.length){newQ=n.map(o=>o.id);modal='neworder';render();return}
+ const ak=lowAck(),lw=lowList().filter(x=>!ak.includes(x.key));
+ if(lw.length){lowQ=lowList();modal='lowstock';render();return}
+ const dd=dueList().filter(o=>!dueAck.includes(o.id));
+ if(dd.length){dueQ=dueList().map(o=>o.id);modal='dueorder';render()}
+}
+function closeLow(ir){
+ try{localStorage.setItem('bn_lowack',JSON.stringify(lowList().map(x=>x.key)))}catch(e){}
+ const f=lowQ[0];lowQ=[];modal='';
+ if(ir&&f){aarea=f.area;atab='estoque';aq=''}
+ render();if(ir)scrollTo(0,0);
+}
+function closeDue(ir){
+ dueAck=[...dueAck,...dueQ];dueQ=[];modal='';
+ if(ir){atab='pedidos';ofil=STATUS[0];aq=''}
+ render();if(ir)scrollTo(0,0);
+}
+function vLowStock(){
+ const l=lowQ.slice().sort((a,b)=>a.tot-b.tot),show=l.slice(0,8);
+ return `<div class="modal"><div role="alertdialog" aria-label="Estoque baixo" style="width:min(480px,100%)"><span class="st">Estoque baixo</span><h2 style="margin-top:8px">${l.length} ${l.length===1?'produto precisa':'produtos precisam'} de atenção</h2>
+ ${show.map(x=>`<div class="line"><span>${esc(x.name)}<small class="tag" style="display:block">${x.area==='importados'?'Importados':'Moda'}${x.det.length?' · '+esc(x.det.join(', ')):''}</small></span><span class="${x.tot<=0?'err':''}">${x.tot<=0?'Esgotado':'Restam '+x.tot}</span></div>`).join('')}
+ ${l.length>show.length?`<p class="tag">+ ${l.length-show.length} outro(s) produto(s)</p>`:''}
+ <div class="row"><button class="btn" onclick="closeLow(true)">Ver estoque</button><button class="btn ghost" onclick="closeLow(false)">Fechar</button></div></div></div>`;
+}
+function vDue(){
+ const l=dueQ.map(id=>S.orders.find(o=>o.id===id)).filter(Boolean).sort((a,b)=>dueOf(a)-dueOf(b));
+ return `<div class="modal"><div role="alertdialog" aria-label="Pedidos para confirmar" style="width:min(480px,100%)"><span class="st">Prazo de confirmação</span><h2 style="margin-top:8px">${l.length} ${l.length===1?'pedido está':'pedidos estão'} perto de vencer</h2><p class="tag">Cada pedido deve ser confirmado em até ${CONF_H} horas.</p>
+ ${l.slice(0,8).map(o=>`<div class="line"><span>${o.id} · ${esc(o.customer.name)}<small class="tag" style="display:block">Prazo até ${fmtDue(o)}</small></span>${dlBadge(o)}</div>`).join('')}
+ <div class="row"><button class="btn" onclick="closeDue(true)">Ver pedidos</button><button class="btn ghost" onclick="closeDue(false)">Fechar</button></div></div></div>`;
 }
 function closeNew(ir){const f=S.orders.find(x=>x.id===newQ[0]);S.seen=[...(S.seen||[]),...newQ];newQ=[];modal='';if(ir){if(f)aarea=oArea(f);atab='pedidos';ofil='Todos';aq=''}save();render()}
 function vNewOrder(){
@@ -551,6 +601,7 @@ function vNewOrder(){
  <div class="line"><span>Cliente</span><span>${esc(o.customer.name)}</span></div><div class="line"><span>WhatsApp</span><span>${esc(o.customer.phone)}</span></div>
  ${o.items.map(i=>`<div class="line"><span>${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}
  <div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line"><span>Pagamento</span><span>${esc(o.pay||'a combinar')}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
+ ${pendConf(o)?`<p class="tag" style="margin:12px 0 0">Confirme este pedido em até ${CONF_H} horas (até ${fmtDue(o)}).</p>`:''}
  <div class="row"><button class="btn" onclick="closeNew(true)">Ver pedidos</button><button class="btn ghost" onclick="closeNew(false)">Fechar</button></div></div></div>`;
 }
 function vPanelHead(){
@@ -568,6 +619,33 @@ const DEF_OPT=()=>({name:'Tamanho',list:aarea==='importados'?[]:['PP','P','M','G
 const optCfg=()=>{const o=cfgOf().opt||{},d=DEF_OPT();return {name:String(o.name||'').trim()||d.name,list:Array.isArray(o.list)?o.list:d.list}};
 const optName=p=>{const o=((S.cfg||{})[isImpP(p)?'importados':'moda']||{}).opt;return String(o&&o.name||'').trim()||'Tamanho'};
 const parseOpts=t=>{const out=[];String(t||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(!out.some(y=>y.toLowerCase()===x.toLowerCase()))out.push(x)});return out};
+function optEditMode(b){const g=$('#popts');if(!g)return;const on=g.classList.toggle('editing');b.textContent=on?'Concluir edição':'Editar opções'}
+function optSetList(list){S.cfg=S.cfg||{};const c=S.cfg[aarea]=S.cfg[aarea]||{f:{}};c.opt={name:(c.opt&&c.opt.name)||'',list}}
+function optRename(btn,ev){
+ ev.preventDefault();ev.stopPropagation();
+ const lab=btn.closest('.opt'),inp=lab.querySelector('.po'),old=inp.value,lc=x=>String(x).toLowerCase();
+ const nv=(prompt('Novo nome para "'+old+'":',old)||'').replace(/[,\n]+/g,' ').trim();
+ if(!nv||nv===old)return;
+ const list=optCfg().list;
+ if([...list,...[...document.querySelectorAll('#popts .po')].map(e=>e.value)].some(y=>lc(y)===lc(nv)&&lc(y)!==lc(old)))return alert('Já existe uma opção com esse nome.');
+ let nl=list.map(x=>lc(x)===lc(old)?nv:x);if(!nl.some(x=>lc(x)===lc(nv)))nl.push(nv);
+ optSetList(nl);
+ let n=0;
+ AP().forEach(p=>{const l=parseOpts(p.sizes);if(!l.some(x=>lc(x)===lc(old)))return;n++;p.sizes=l.map(x=>lc(x)===lc(old)?nv:x).join(',');
+  if(hasStk(p)){const k=Object.keys(p.stk).find(y=>lc(y)===lc(old));if(k!==undefined){p.stk[nv]=p.stk[k];if(k!==nv)delete p.stk[k]}}});
+ inp.value=nv;lab.querySelector('span').textContent=nv;
+ document.querySelectorAll('.pqs').forEach(e=>{if(lc(e.dataset.s)===lc(old))e.dataset.s=nv});
+ stkGrid();save();toast('"'+old+'" agora é "'+nv+'"'+(n?' em '+n+' produto(s).':'.'));
+}
+function optDel(btn,ev){
+ ev.preventDefault();ev.stopPropagation();
+ const lab=btn.closest('.opt'),inp=lab.querySelector('.po'),old=inp.value,lc=x=>String(x).toLowerCase();
+ const used=AP().filter(p=>parseOpts(p.sizes).some(x=>lc(x)===lc(old))).length;
+ if(!confirm(used?'A opção "'+old+'" está em '+used+' produto(s). Ela sai só da lista de opções; os produtos que já usam continuam com ela. Excluir da lista?':'Excluir "'+old+'" da lista de opções?'))return;
+ optSetList(optCfg().list.filter(x=>lc(x)!==lc(old)));
+ if(!inp.checked)lab.remove();
+ save();toast('"'+old+'" saiu da lista.');
+}
 function optAll(v){document.querySelectorAll('#popts .po').forEach(e=>e.checked=v);stkGrid()}
 /* ---- estoque por tamanho no cadastro ---- */
 const KIND_DEF=['Vestido','Blusa','Camisa','Calça','Saia','Short','Jaqueta','Conjunto','Acessório'];
@@ -620,7 +698,7 @@ function prodForm(ep){
  +(aarea==='importados'?'':`<label>${L('gen')}</label><select id="pg">${['Feminino','Masculino','Unissex'].map(g=>`<option ${ep&&ep.gen===g?'selected':''}>${g}</option>`).join('')}</select>`)
  +(on('coll')?`<label>${L('coll')}</label><input id="pc" list="cl" placeholder="Ex.: Verão 26" value="${esc(ep?ep.coll:'')}"><datalist id="cl">${S.colls.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>`:'')
  +(on('sizes')?(()=>{const oc=optCfg(),cur=ep?parseOpts(ep.sizes).filter(x=>x.toLowerCase()!=='único'):[],all=[...oc.list,...cur.filter(x=>!oc.list.some(y=>y.toLowerCase()===x.toLowerCase()))],isOn=x=>cur.some(y=>y.toLowerCase()===x.toLowerCase());
-  return `<label>${L('sizes')}</label>${all.length?`<div class="chk" id="popts" role="group" aria-label="${L('sizes')}">${all.map(x=>`<label class="opt"><input type="checkbox" class="po" value="${esc(x)}" ${isOn(x)?'checked':''} onchange="stkGrid()"><span>${esc(x)}</span></label>`).join('')}</div><div class="chkact"><button type="button" class="a-link" onclick="optAll(true)">Marcar todas</button><button type="button" class="a-link" onclick="optAll(false)">Limpar</button></div>`:'<div id="popts"></div>'}<input id="pxo" placeholder="Outra opção? Escreva aqui (separe por vírgula)" aria-label="Outra opção" onchange="stkGrid()"><p class="hint">Marque as que valem para este produto. Marque pelo menos uma. O estoque é informado por opção. Opções novas entram na lista automaticamente.</p>`})():'')
+  return `<label>${L('sizes')}</label>${all.length?`<div class="chk" id="popts" role="group" aria-label="${L('sizes')}">${all.map(x=>`<label class="opt"><input type="checkbox" class="po" value="${esc(x)}" ${isOn(x)?'checked':''} onchange="stkGrid()"><span>${esc(x)}</span><button type="button" class="oed" onclick="optRename(this,event)" aria-label="Renomear ${esc(x)}" title="Renomear">✎</button><button type="button" class="odel" onclick="optDel(this,event)" aria-label="Excluir ${esc(x)} da lista" title="Excluir da lista">×</button></label>`).join('')}</div><div class="chkact"><button type="button" class="a-link" onclick="optAll(true)">Marcar todas</button><button type="button" class="a-link" onclick="optAll(false)">Limpar</button><button type="button" class="a-link" onclick="optEditMode(this)">Editar opções</button></div>`:'<div id="popts"></div>'}<input id="pxo" placeholder="Outra opção? Escreva aqui (separe por vírgula)" aria-label="Outra opção" onchange="stkGrid()"><p class="hint">Marque as que valem para este produto. Marque pelo menos uma. O estoque é informado por opção. Opções novas entram na lista automaticamente. Para renomear ou excluir uma opção, toque em "Editar opções".</p>`})():'')
  +(on('stock')?(()=>{const sz=ep&&parseOpts(ep.sizes).length?szOf(ep):[],v=ep?(hasStk(ep)?ep.stk:(sz.length===1?{[sz[0]]:ep.stock}:{})):{};
   return `<label>${L('stock')}</label><div id="pstk">${stkHtml(sz,v)}</div>${ep&&!hasStk(ep)&&ep.stock>0?`<p class="hint err">Este produto tem ${ep.stock} peças no total, ainda sem divisão. Marque as opções e distribua nos campos acima.</p>`:''}`})():'')
  +(['brand','desc','specs'].some(on)?`<details class="fold more" ${ep&&(ep.brand||ep.desc||String(ep.specs||'').trim())?'open':''}><summary>Mais detalhes (marca, descrição...)</summary><div class="foldb">`:'')
@@ -673,7 +751,7 @@ function vAdmin(){
  if(atab==='estoque'){
   const all=AP(),l=all.filter(aMatch),mp=all.find(p=>p.id==mvP)||l[0]||all[0],
    zero=all.reduce((a,p)=>a+(hasStk(p)?Object.values(p.stk).filter(v=>!(+v>0)).length:0),0);
-  body=`<div class="tiles">${tile('Peças em estoque',all.reduce((a,p)=>a+p.stock,0))}${tile('Produtos',all.length)}${tile('Estoque baixo',all.filter(p=>p.stock<=3).length)}${tile(SZ().p+' zerados',zero)}</div>
+  body=`<div class="tiles">${tile('Peças em estoque',all.reduce((a,p)=>a+p.stock,0))}${tile('Produtos',all.length)}${tile('Estoque baixo',all.filter(p=>p.stock<=LOW).length)}${tile(SZ().p+' zerados',zero)}</div>
   <details class="fold" ${mvOpen?'open':''} ontoggle="mvOpen=this.open"><summary>Registrar entrada ou saída</summary><div class="foldb">
    <label>Produto</label><select id="mp" onchange="mvP=this.value;mvSizes();mvType()">${all.map(p=>`<option value="${p.id}" ${mp&&p.id==mp.id?'selected':''}>${esc(p.name)} (${p.stock})</option>`).join('')}</select>
    <label>${SZ().s}</label><select id="ms">${mvOpts(mp)}</select>
@@ -682,7 +760,7 @@ function vAdmin(){
    <label>Observação (opcional)</label><input id="mn">
    <div class="row"><button class="btn" onclick="addMove()">Registrar</button></div></div></details>
   <h3 class="sec">Estoque por ${SZ().s.toLowerCase()}</h3>${aSearch('Buscar produto pelo nome')}
-  <div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=3?'err':''}">${p.stock}</b><small>total</small></div><div class="pac"><button class="btn sm ghost" onclick="mvP=${p.id};mvOpen=true;render();scrollTo(0,0)">Movimentar</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}
+  <div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=LOW?'err':''}">${p.stock}</b><small>total</small></div><div class="pac"><button class="btn sm ghost" onclick="mvP=${p.id};mvOpen=true;render();scrollTo(0,0)">Movimentar</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}
   <h3 class="sec">Histórico</h3>${AM().length?`<div class="mvl">${AM().slice(0,60).map(mvRow).join('')}</div>`:'<div class="empty">Nenhuma movimentação ainda.</div>'}`;
  }
  if(atab==='vendas'){
@@ -701,7 +779,7 @@ function vAdmin(){
   const cnt=st=>AO().filter(o=>o.status===st).length,k=aq.trim().toLowerCase();
   const l=AO().filter(o=>(ofil==='Todos'||o.status===ofil)&&(!k||o.id.toLowerCase().includes(k)||o.customer.name.toLowerCase().includes(k)));
   body=`<div class="pills">${['Todos',...STATUS].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?AO().length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
-  ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st" data-s="${o.status}">${o.status}</span></div><div class="ordm">${o.store?'<span class="ordk">Venda na loja</span>':''}<span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}${o.store?'':`<span>${esc(o.customer.addr)}${o.customer.cep?' · CEP '+esc(o.customer.cep):''}</span>`}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${i.size?' ('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>${o.store?'':'Frete '+esc(o.ship.name)+' '+money(o.ship.price)+' · '}Pagamento: ${esc(o.pay||'a combinar')}</small></div>
+  ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st" data-s="${o.status}">${o.status}</span></div><div class="ordm">${dlBadge(o)}${o.store?'<span class="ordk">Venda na loja</span>':''}<span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}${o.store?'':`<span>${esc(o.customer.addr)}${o.customer.cep?' · CEP '+esc(o.customer.cep):''}</span>`}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${i.size?' ('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>${o.store?'':'Frete '+esc(o.ship.name)+' '+money(o.ship.price)+' · '}Pagamento: ${esc(o.pay||'a combinar')}</small></div>
   <div class="row ordact">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select>${o.store?'':`<input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>`}${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
  }
  if(atab==='combos'){
@@ -774,12 +852,12 @@ function render(){
  document.body.classList.toggle('is-panel',panel);
  $('#app').innerHTML=`${panel?vPanelHead():`<header><div class="wrap hd">
  <button class="iconbtn" onclick="menu=true;render()" aria-label="Abrir menu">${IC.menu}</button>
- <button class="brand" onclick="q='';go('loja')" aria-label="Bonely Store, início">BONELY STORE${SEC==='importados'?'<span class="sep"><i>|</i><b>IMPORTADOS</b></span>':''}</button>
+ <button class="brand" onclick="q='';go('loja')" aria-label="Bonely Store, início">BONELY<span class="bsub">STORE${SEC==='importados'?' <i>|</i> IMPORTADOS':''}</span></button>
  <form class="search" onsubmit="doSearch(event)"><input id="q" value="${esc(q)}" placeholder="Digite o que você procura" aria-label="Buscar produtos"><button aria-label="Buscar">${IC.search}</button></form>
  <a class="hbox central" href="https://wa.me/${WA}" target="_blank" rel="noopener">${IC.head}<span><small>Central de</small>Atendimento</span></a>
  <button class="hbox" onclick="${acct()}">${IC.user}<span><small>${cu?'Olá, '+esc(cu.name.split(' ')[0]):'Olá, Bem-vindo(a)'}</small>${cu?'Minha conta':'Entre ou Cadastre-se'}</span></button>
  <button class="cartbtn" onclick="cartOpen=true;render()" aria-label="Carrinho, ${n} itens">${IC.cart}${n?`<b>${n}</b>`:''}</button></div></header>`}
- <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel?'':vFooter()}${vCart()}${vMenu()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><a class="fab wa" href="https://wa.me/${WA}" target="_blank" rel="noopener" aria-label="WhatsApp">${IC.wa}</a></div>`}`;
+ <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel?'':vFooter()}${vCart()}${vMenu()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='lowstock'?vLowStock():''}${modal==='dueorder'?vDue():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><a class="fab wa" href="https://wa.me/${WA}" target="_blank" rel="noopener" aria-label="WhatsApp">${IC.wa}</a></div>`}`;
  if(panel&&adminOk&&!modal)setTimeout(checkNew,0);
  if(panel&&adminOk){const b=document.querySelector('.tabs button.on'),t=b&&b.parentElement;if(t)t.scrollLeft=b.offsetLeft-(t.clientWidth-b.offsetWidth)/2}
 }
