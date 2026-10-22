@@ -57,15 +57,40 @@ function item(key){
  if(String(key).startsWith('c')){const c=S.combos.find(x=>'c'+x.id===key);return c&&{name:c.name,price:c.price,combo:c}}
  const p=S.products.find(x=>x.id==key);return p&&{name:p.name,price:p.price,p}
 }
-function stockOf(key){
+/* Estoque por tamanho: p.stk={P:3,M:5}. p.stock é sempre a SOMA (estoque geral).
+   Produtos antigos, sem p.stk, continuam funcionando como antes até serem editados. */
+const szOf=p=>{const l=parseOpts(p.sizes);return l.length?l:['Único']};
+const hasStk=p=>!!(p&&p.stk&&typeof p.stk==='object');
+const stkQ=(p,s)=>hasStk(p)?(+p.stk[s]||0):p.stock;
+const sumOf=o=>Object.values(o).reduce((a,v)=>a+(+v||0),0);
+const stkSum=p=>{p.stock=sumOf(p.stk)};
+const rs=i=>String(i.key).startsWith('c')?'':(i.size||'');
+function ensureStk(p){if(hasStk(p))return true;const l=szOf(p);if(l.length>1)return false;p.stk={[l[0]]:p.stock};return true}
+function takeStk(p,q,s){
+ if(!hasStk(p)){p.stock=Math.max(0,p.stock-q);return}
+ if(s&&s in p.stk)p.stk[s]=Math.max(0,(+p.stk[s]||0)-q);
+ else{let r=q;Object.keys(p.stk).sort((a,b)=>p.stk[b]-p.stk[a]).forEach(k=>{const t=Math.min(r,+p.stk[k]||0);p.stk[k]-=t;r-=t})}
+ stkSum(p);
+}
+function giveStk(p,q,s){
+ if(!hasStk(p)){p.stock+=q;return}
+ const k=s&&s in p.stk?s:Object.keys(p.stk)[0];p.stk[k]=(+p.stk[k]||0)+q;stkSum(p);
+}
+function sizeOpts(p){
+ let first=true;
+ return szOf(p).map(x=>{const q=stkQ(p,x),out=hasStk(p)&&q<=0,sel=!out&&first;if(sel)first=false;
+  return `<option value="${esc(x)}"${out?' disabled':''}${sel?' selected':''}>${esc(x)}${hasStk(p)?(out?' (esgotado)':q<=3?' (restam '+q+')':''):''}</option>`}).join('');
+}
+const lowTag=p=>!hasStk(p)&&p.stock<=3?`<div class="tag">Restam ${p.stock}</div>`:'';
+function stockOf(key,size){
  if(String(key).startsWith('c')){const c=item(key).combo;return Math.min(...c.items.map(i=>S.products.find(p=>p.id==i)?.stock??0))}
- return item(key).p.stock;
+ const p=item(key).p;return size?stkQ(p,size):p.stock;
 }
 function addCart(key){
  const sel=$('#sz'+key),size=sel?sel.value:'';
  const ex=CART().find(i=>i.key==key&&i.size==size);
  const q=(ex?ex.qty:0)+1;
- if(q>stockOf(key)){alert('Sem estoque suficiente.');return}
+ if(q>stockOf(key,size)){alert('Sem estoque suficiente'+(size&&size!=='Único'?' no tamanho '+size:'')+'.');return}
  ex?ex.qty++:CART().push({key,size,qty:1});
  save();cartOpen=true;render();
 }
@@ -114,7 +139,7 @@ function _setStatus(id,st){
  const o=S.orders.find(x=>x.id===id);o.status=st;
  if(st==='Pago'&&!o.stockDone){
   o.items.forEach(i=>{const ps=String(i.key).startsWith('c')?item(i.key)?.combo.items.map(x=>S.products.find(p=>p.id==x)):[S.products.find(p=>p.id==i.key)];
-   (ps||[]).forEach(p=>{if(p){p.stock=Math.max(0,p.stock-i.qty);S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:'saida',qty:i.qty,note:'Pedido '+id,area:isImpP(p)?'importados':'moda'})}})});
+   (ps||[]).forEach(p=>{if(p){takeStk(p,i.qty,rs(i));S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,size:rs(i),type:'saida',qty:i.qty,note:'Pedido '+id,area:isImpP(p)?'importados':'moda'})}})});
   o.stockDone=true;
  }
  save();render();
@@ -126,29 +151,55 @@ function readImg(file,cb){
 let newImg='';
 function pickImg(e){if(e.files[0])readImg(e.files[0],d=>{newImg=d;$('#imgok').textContent='Foto carregada ✓'})}
 function editProd(id){aedit=id;newImg='';render();scrollTo(0,0)}
-function cancelEdit(){aedit=null;newImg='';render()}
+function cancelEdit(){aedit=null;pform=false;newImg='';render()}
 function addProd(){
  const n=$('#pn').value.trim(),pr=parseFloat($('#pp').value);
  if(!n||isNaN(pr))return alert('Informe nome e preço.');
  const v=id=>$(id)?$(id).value.trim():'';
  const has=id=>!!$(id),d={...(aedit?{}:{coll:'',sizes:'Único',brand:'',desc:'',specs:''}),name:n,price:pr,gen:$('#pg')?$('#pg').value:''};
- if(has('#pc'))d.coll=v('#pc');if(has('#popts')){const ck=[...document.querySelectorAll('#popts .po:checked')].map(e=>e.value),ex=parseOpts(v('#pxo')).filter(x=>!ck.some(y=>y.toLowerCase()===x.toLowerCase()));
+ if(has('#pc'))d.coll=v('#pc');if(has('#pk'))d.kind=v('#pk');if(has('#popts')){const ck=[...document.querySelectorAll('#popts .po:checked')].map(e=>e.value),ex=parseOpts(v('#pxo')).filter(x=>!ck.some(y=>y.toLowerCase()===x.toLowerCase()));
+  if(!ck.length&&!ex.length)return alert('Marque ao menos uma opção em "'+fc('sizes').l+'" (tamanho ou sabor). O estoque é controlado por opção.');
   if(ex.length){S.cfg=S.cfg||{};const c=S.cfg[aarea]=S.cfg[aarea]||{f:{}},o=optCfg();c.opt={name:(c.opt&&c.opt.name)||'',list:[...o.list,...ex.filter(x=>!o.list.some(y=>y.toLowerCase()===x.toLowerCase()))]}}
-  d.sizes=[...ck,...ex].join(',')||'Único'}if(has('#pm'))d.brand=v('#pm');if(has('#pd'))d.desc=v('#pd');if(has('#px'))d.specs=cleanSpecs(v('#px'));
+  d.sizes=[...ck,...ex].join(',')}if(has('#pm'))d.brand=v('#pm');if(has('#pd'))d.desc=v('#pd');if(has('#px'))d.specs=cleanSpecs(v('#px'));
  if(d.coll&&!S.colls.includes(d.coll))S.colls.push(d.coll);
- if(aedit){const p=S.products.find(x=>x.id==aedit);if(p){Object.assign(p,d);if(newImg)p.img=newImg}aedit=null;newImg='';save();render();return}
- const q=parseInt(v('#pq'))||0;
- S.products.push({id:Date.now(),type:$('#pt').value,...d,stock:q,img:newImg});
- if(q>0)S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:n,type:'entrada',qty:q,note:'Cadastro inicial',area:aarea});
- newImg='';save();render();
+ const epr=aedit?S.products.find(x=>x.id==aedit):null,szF=d.sizes?parseOpts(d.sizes):(epr?szOf(epr):['Único']),hasGrid=!!document.querySelector('.pqs'),nv={};
+ document.querySelectorAll('.pqs').forEach(e=>nv[e.dataset.s]=Math.max(0,parseInt(e.value)||0));
+ const newStk={};szF.forEach(x=>{newStk[x]=nv[x]||0});
+ if(aedit){const p=epr;if(p){
+   if(hasGrid&&!hasStk(p)&&p.stock>0&&!sumOf(newStk)&&!confirm('Nenhum tamanho está com estoque informado. As '+p.stock+' peças deste produto serão zeradas. Continuar?'))return;
+   if(hasGrid)applyStk(p,newStk,'Ajuste no cadastro');
+   Object.assign(p,d);if(newImg)p.img=newImg}
+  aedit=null;pform=false;newImg='';save();render();toast('Produto salvo.');return}
+ S.products.push({id:Date.now(),type:$('#pt').value,...d,stk:newStk,stock:sumOf(newStk),img:newImg});
+ Object.keys(newStk).forEach(x=>{if(newStk[x]>0)S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:n,size:x,type:'entrada',qty:newStk[x],note:'Cadastro inicial',area:aarea})});
+ pform=false;newImg='';save();render();toast('Produto salvo.');
 }
 function delProd(id){if(confirm('Excluir produto?')){if(aedit===id)aedit=null;S.products=S.products.filter(p=>p.id!==id);save();render()}}
-function addMove(){
- const p=S.products.find(x=>x.id==$('#mp').value),q=parseInt($('#mq').value),t=$('#mt').value;
+async function addMove(){
+ const p=S.products.find(x=>x.id==$('#mp').value),q=parseInt($('#mq').value),t=$('#mt').value,z=$('#ms')?$('#ms').value:'',note=($('#mn').value||'').trim();
  if(!p||!q||q<1)return alert('Escolha produto e quantidade.');
- if(t==='saida'&&q>p.stock)return alert('Saída maior que o estoque.');
- p.stock+=t==='entrada'?q:-q;
- S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:t,qty:q,note:$('#mn').value||'',area:isImpP(p)?'importados':'moda'});save();render();
+ if(!ensureStk(p))return alert('Este produto ainda não tem o estoque dividido por tamanho. Abra ele em Produtos > Editar e informe quanto tem de cada tamanho.');
+ const cur=stkQ(p,z),sale=t==='venda';
+ if(t!=='entrada'&&q>cur)return alert((sale?'Venda':'Saída')+' maior que o estoque'+(z&&z!=='Único'?' do tamanho '+z:'')+' ('+cur+').');
+ const area=isImpP(p)?'importados':'moda',when=()=>new Date().toLocaleString('pt-BR');
+ if(sale){
+  const v=parseFloat(String($('#mv').value).replace(',','.')),pay=$('#mpay').value,cli=($('#mcl').value||'').trim();
+  if(!(v>=0))return alert('Informe o valor de venda de cada peça.');
+  if(addMove.b)return;addMove.b=1;
+  try{
+   const seq=FBM?await FB.nextSeq().catch(()=>null):++S.seq;
+   if(!seq)return alert('Não foi possível registrar a venda agora. Tente de novo em instantes.');
+   const id='BN'+seq,sub=+(v*q).toFixed(2),ts=Date.now();
+   S.orders.unshift({id,date:when(),ts,customer:{name:cli||'Venda na loja',email:'',phone:'',addr:'Venda na loja',cep:''},items:[{key:p.id,name:p.name,price:v,qty:q,size:z}],subtotal:sub,ship:{name:'Venda na loja',price:0,local:true},total:sub,pay,status:'Entregue',tracking:'',stockDone:true,store:true,area});
+   S.seen=[...(S.seen||[]),id];
+   takeStk(p,q,z);
+   S.moves.unshift({date:when(),ts,name:p.name,size:z,type:'saida',qty:q,note:('Venda na loja '+id+(note?' · '+note:'')),area});
+   mvOpen=false;mvP=null;save();render();toast('Venda '+id+' registrada como Entregue.');
+  }finally{addMove.b=0}
+  return;
+ }
+ p.stk[z]=(+p.stk[z]||0)+(t==='entrada'?q:-q);stkSum(p);
+ S.moves.unshift({date:when(),ts:Date.now(),name:p.name,size:z,type:t==='entrada'?'entrada':'saida',qty:q,note,area});mvOpen=false;mvP=null;save();render();toast('Movimento registrado.');
 }
 function addCombo(){
  const n=cbName.trim(),pr=parseFloat(cbPrice);
@@ -314,8 +365,8 @@ function vProduto(){
  if(!p)return `<section><div class="wrap"><h2>Produto não encontrado</h2><p class="sub">Esse link pode estar desatualizado.</p><button class="btn" onclick="go('loja')">Ver catálogo</button></div></section>`;
  const imp=p.type==='avulso';
  return `<section><div class="wrap"><p class="backrow"><button class="backbtn" onclick="go('loja')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Voltar ao catálogo</button></p>
- <div class="pdp"><div class="card">${ph(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${money(p.price)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
- ${p.stock>0?`<label>${esc(optName(p))}</label><select id="sz${p.id}">${p.sizes.split(',').map(x=>`<option>${esc(x.trim())}</option>`).join('')}</select>${p.stock<=3?`<div class="tag">Restam ${p.stock}</div>`:''}<div class="row"><button class="btn" onclick="addCart(${p.id})">Adicionar ao carrinho</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`:`<div class="tag err">Esgotado</div><div class="row"><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`}</div></div></div></section>`;
+ <div class="pdp"><div class="card">${ph(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.kind,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${money(p.price)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
+ ${p.stock>0?`<label>${esc(optName(p))}</label><select id="sz${p.id}">${sizeOpts(p)}</select>${lowTag(p)}<div class="row"><button class="btn" onclick="addCart(${p.id})">Adicionar ao carrinho</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`:`<div class="tag err">Esgotado</div><div class="row"><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`}</div></div></div></section>`;
 }
 function updPrev(){const p=curShareProd(),e=$('#amsg');if(p&&e)e.innerHTML=fmtWA(shareMsg(p,asn.trim(),1))}
 function vShareAdmin(){
@@ -367,7 +418,7 @@ function vLoja(){
  ${SEC==='importados'?'':`<div class="pills">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';render()">${l}</button>`).join('')}</div>
  ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];render()">${esc(c)}</button>`).join('')}</div>`:''}`}
  ${list.length?`<div class="grid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${money(p.price)}</div>
-  ${p.stock>0?`<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${p.sizes.split(',').map(s=>`<option>${esc(s.trim())}</option>`).join('')}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${p.stock<=3?`<div class="tag">Restam ${p.stock}</div>`:''}`:'<div class="tag err">Esgotado</div>'}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
+  ${p.stock>0?`<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${sizeOpts(p)}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${lowTag(p)}`:'<div class="tag err">Esgotado</div>'}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
  </div></section>
  ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
 }
@@ -404,7 +455,7 @@ function orderProds(i){return String(i.key).startsWith('c')?(item(i.key)?item(i.
 function setStatus(id,st){
  const o=S.orders.find(x=>x.id===id);
  if(st==='Cancelado'&&o.stockDone&&!o.sample){
-  o.items.forEach(i=>orderProds(i).forEach(p=>{if(p){p.stock+=i.qty;S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:'entrada',qty:i.qty,note:'Cancelamento '+id,area:isImpP(p)?'importados':'moda'})}}));
+  o.items.forEach(i=>orderProds(i).forEach(p=>{if(p){giveStk(p,i.qty,rs(i));S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,size:rs(i),type:'entrada',qty:i.qty,note:'Cancelamento '+id,area:isImpP(p)?'importados':'moda'})}}));
   o.stockDone=false;
  }
  _setStatus(id,st);
@@ -432,7 +483,7 @@ async function confirmDelOrder(){
  delBusy=true;
  try{if(FBM)await FB.confirmPw(pw);else if(pw!=='1234')throw new Error('bad-pw')}
  catch(e){delBusy=false;const c=String(e&&e.code||e&&e.message||'');delErr=/too-many|network/.test(c)?FB.errMsg(e):'Senha incorreta. O pedido não foi excluído.';render();delFocus();return}
- if(delBack(o))o.items.forEach(i=>orderProds(i).forEach(p=>{if(p){p.stock+=i.qty;S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,type:'entrada',qty:i.qty,note:'Exclusão do pedido '+o.id,area:isImpP(p)?'importados':'moda'})}}));
+ if(delBack(o))o.items.forEach(i=>orderProds(i).forEach(p=>{if(p){giveStk(p,i.qty,rs(i));S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,size:rs(i),type:'entrada',qty:i.qty,note:'Exclusão do pedido '+o.id,area:isImpP(p)?'importados':'moda'})}}));
  S.orders=S.orders.filter(x=>x.id!==o.id);
  delId=null;delBusy=false;modal='';save();render();toast('Pedido '+o.id+' excluído.');
 }
@@ -508,37 +559,82 @@ function vPanelHead(){
  ${adminOk&&aarea?`<div class="welcome"><div class="wrap"><h1 class="serif">Olá, ${OWNER_FULL}</h1><p>Painel ${AREAS[aarea].name}. ${greet()}!</p><p class="meta">${gi.g?`Sua meta do mês está em <b>${gi.pct}%</b> (${money(gi.m)} de ${money(gi.g)}).`:'Você ainda não definiu a meta do mês. Defina na aba Vendas.'}</p>${gi.g?`<div class="prog"><i style="width:${Math.min(100,gi.pct)}%"></i></div>`:''}</div></div>`:''}`;
 }
 /* ---- configuração do cadastro de produto (por painel) ---- */
-const FDEF={name:'Nome',price:'Preço (R$)',gen:'Público',coll:'Coleção',sizes:'Tamanhos',stock:'Estoque inicial',brand:'Marca',desc:'Descrição',specs:'Detalhes do produto',img:'Foto'};
+const FDEF={name:'Nome',price:'Preço (R$)',kind:'Tipo da peça',gen:'Público',coll:'Coleção',sizes:'Tamanhos',stock:'Estoque por tamanho',brand:'Marca',desc:'Descrição',specs:'Detalhes do produto',img:'Foto'};
+const FDEF_IMP={sizes:'Tamanhos/Sabores',stock:'Estoque por tamanho/sabor'};
+const fdef=k=>(aarea==='importados'&&FDEF_IMP[k])||FDEF[k];
+const SZ=()=>aarea==='importados'?{s:'Tamanho/Sabor',p:'Tamanhos/Sabores'}:{s:'Tamanho',p:'Tamanhos'};
 const FREQ=['name','price','gen'];
 const DEF_OPT=()=>({name:'Tamanho',list:aarea==='importados'?[]:['PP','P','M','G','GG','Extra GG','Baby Look']});
 const optCfg=()=>{const o=cfgOf().opt||{},d=DEF_OPT();return {name:String(o.name||'').trim()||d.name,list:Array.isArray(o.list)?o.list:d.list}};
 const optName=p=>{const o=((S.cfg||{})[isImpP(p)?'importados':'moda']||{}).opt;return String(o&&o.name||'').trim()||'Tamanho'};
 const parseOpts=t=>{const out=[];String(t||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(!out.some(y=>y.toLowerCase()===x.toLowerCase()))out.push(x)});return out};
-function optAll(v){document.querySelectorAll('#popts .po').forEach(e=>e.checked=v)}
+function optAll(v){document.querySelectorAll('#popts .po').forEach(e=>e.checked=v);stkGrid()}
+/* ---- estoque por tamanho no cadastro ---- */
+const KIND_DEF=['Vestido','Blusa','Camisa','Calça','Saia','Short','Jaqueta','Conjunto','Acessório'];
+const kinds=()=>{const u=[...new Set(AP().map(p=>p.kind).filter(Boolean))];return aarea==='importados'?u:[...u,...KIND_DEF.filter(k=>!u.some(y=>y.toLowerCase()===k.toLowerCase()))]};
+function stkHtml(sz,v){
+ if(!sz.length)return '<p class="hint" id="pstt">Marque ao menos uma opção acima para informar o estoque de cada uma.</p>';
+ const t=sz.reduce((a,x)=>a+(parseInt(v[x])||0),0);
+ return `<div class="stkg">${sz.map(x=>`<label class="stkc"><span>${esc(x)}</span><input class="pqs" type="number" min="0" inputmode="numeric" data-s="${esc(x)}" value="${esc(x in v?v[x]:'')}" placeholder="0" oninput="stkTot()" aria-label="Estoque do tamanho ${esc(x)}"></label>`).join('')}</div><p class="hint" id="pstt">Estoque geral deste produto: ${t} peças</p>`;
+}
+function stkTot(){const t=[...document.querySelectorAll('.pqs')].reduce((a,e)=>a+(parseInt(e.value)||0),0),e=$('#pstt');if(e)e.textContent='Estoque geral deste produto: '+t+' peças'}
+function stkSizes(){
+ const ep=aedit?S.products.find(x=>x.id==aedit):null;
+ if(!$('#popts'))return ep?szOf(ep):['Único'];
+ const ck=[...document.querySelectorAll('#popts .po:checked')].map(e=>e.value),ex=parseOpts($('#pxo')?$('#pxo').value:'').filter(x=>!ck.some(y=>y.toLowerCase()===x.toLowerCase()));
+ return [...ck,...ex];
+}
+function stkGrid(){
+ const box=$('#pstk');if(!box)return;
+ const ep=aedit?S.products.find(x=>x.id==aedit):null,old={};
+ box.querySelectorAll('.pqs').forEach(e=>old[e.dataset.s]=e.value);
+ const base=ep?(hasStk(ep)?ep.stk:szOf(ep).length===1?{[szOf(ep)[0]]:ep.stock}:{}):{},v={},sz=stkSizes();
+ sz.forEach(x=>{v[x]=x in old?old[x]:(x in base?base[x]:'')});
+ box.innerHTML=stkHtml(sz,v);
+}
+/* grava o estoque novo e registra no histórico o que mudou em cada tamanho */
+function applyStk(p,ns,note){
+ const old=hasStk(p)?p.stk:(szOf(p).length===1?{[szOf(p)[0]]:p.stock}:null),ar=isImpP(p)?'importados':'moda',
+  mv=(sz,df)=>S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,size:sz,type:df>0?'entrada':'saida',qty:Math.abs(df),note,area:ar});
+ if(old)new Set([...Object.keys(old),...Object.keys(ns)]).forEach(x=>{const df=(+ns[x]||0)-(+old[x]||0);if(df)mv(x,df)});
+ else{const df=sumOf(ns)-p.stock;if(df)mv('',df)}
+ p.stk=ns;stkSum(p);
+}
+function stkChips(p){
+ if(!hasStk(p)){const l=szOf(p);return l.length===1?`<span class="szc">${esc(l[0])} · ${p.stock}</span>`:'<span class="szc low">sem divisão por tamanho</span>'}
+ return szOf(p).map(x=>{const q=stkQ(p,x);return `<span class="szc${q<=0?' out':q<=2?' low':''}">${esc(x)} · ${q}</span>`}).join('');
+}
+const mvOpts=p=>p?szOf(p).map(x=>`<option value="${esc(x)}">${esc(x)}${hasStk(p)||szOf(p).length===1?' ('+stkQ(p,x)+')':''}</option>`).join(''):'';
+function mvType(){const t=$('#mt'),b=$('#msale');if(!t||!b)return;b.style.display=t.value==='venda'?'':'none';const p=S.products.find(x=>x.id==$('#mp').value),v=$('#mv');if(p&&v)v.value=p.price}
+function mvSizes(){const p=S.products.find(x=>x.id==$('#mp').value),e=$('#ms');if(e)e.innerHTML=mvOpts(p)}
 const DEF_TPL=()=>aarea==='importados'?'Material: \nCor: \nDimensões: \nOrigem: ':'Tecido: \nCor: \nModelagem: \nComposição: \nCuidados: ';
 const cfgOf=()=>((S.cfg||{})[aarea])||{};
-const fc=k=>{const c=(cfgOf().f||{})[k]||{};return {l:String(c.l||'').trim()||FDEF[k],on:FREQ.includes(k)||!c.h}};
+const fc=k=>{const c=(cfgOf().f||{})[k]||{};return {l:String(c.l||'').trim()||fdef(k),on:FREQ.includes(k)||!c.h}};
 const SPEC_TPL=()=>{const t=cfgOf().tpl;return typeof t==='string'?t:DEF_TPL()};
 const cleanSpecs=t=>String(t||'').split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!/^[^:]+:\s*$/.test(x)).join('\n');
 function toast(t){const e=document.createElement('div');e.className='toast';e.setAttribute('role','status');e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2400)}
 function prodForm(ep){
  const L=k=>esc(fc(k).l),on=k=>fc(k).on;
  return `<label>${L('name')}</label><input id="pn" value="${esc(ep?ep.name:'')}"><label>${L('price')}</label><input id="pp" type="number" step="0.01" value="${ep?ep.price:''}"><input type="hidden" id="pt" value="${aarea==='importados'?'avulso':'roupa'}">`
+ +(on('kind')?`<label>${L('kind')}</label><input id="pk" list="kl" placeholder="Ex.: Vestido, Blusa, Calça..." value="${esc(ep?ep.kind:'')}"><datalist id="kl">${kinds().map(k=>`<option value="${esc(k)}">`).join('')}</datalist>`:'')
  +(aarea==='importados'?'':`<label>${L('gen')}</label><select id="pg">${['Feminino','Masculino','Unissex'].map(g=>`<option ${ep&&ep.gen===g?'selected':''}>${g}</option>`).join('')}</select>`)
  +(on('coll')?`<label>${L('coll')}</label><input id="pc" list="cl" placeholder="Ex.: Verão 26" value="${esc(ep?ep.coll:'')}"><datalist id="cl">${S.colls.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>`:'')
  +(on('sizes')?(()=>{const oc=optCfg(),cur=ep?parseOpts(ep.sizes).filter(x=>x.toLowerCase()!=='único'):[],all=[...oc.list,...cur.filter(x=>!oc.list.some(y=>y.toLowerCase()===x.toLowerCase()))],isOn=x=>cur.some(y=>y.toLowerCase()===x.toLowerCase());
-  return `<label>${L('sizes')}</label>${all.length?`<div class="chk" id="popts" role="group" aria-label="${L('sizes')}">${all.map(x=>`<label class="opt"><input type="checkbox" class="po" value="${esc(x)}" ${isOn(x)?'checked':''}><span>${esc(x)}</span></label>`).join('')}</div><div class="chkact"><button type="button" class="a-link" onclick="optAll(true)">Marcar todas</button><button type="button" class="a-link" onclick="optAll(false)">Limpar</button></div>`:'<div id="popts"></div>'}<input id="pxo" placeholder="Outra opção? Escreva aqui (separe por vírgula)" aria-label="Outra opção"><p class="hint">Marque as que valem para este produto. Sem nenhuma marcada, fica "Único". Opções novas entram na lista automaticamente.</p>`})():'')
- +(!ep&&on('stock')?`<label>${L('stock')}</label><input id="pq" type="number" min="0">`:'')
+  return `<label>${L('sizes')}</label>${all.length?`<div class="chk" id="popts" role="group" aria-label="${L('sizes')}">${all.map(x=>`<label class="opt"><input type="checkbox" class="po" value="${esc(x)}" ${isOn(x)?'checked':''} onchange="stkGrid()"><span>${esc(x)}</span></label>`).join('')}</div><div class="chkact"><button type="button" class="a-link" onclick="optAll(true)">Marcar todas</button><button type="button" class="a-link" onclick="optAll(false)">Limpar</button></div>`:'<div id="popts"></div>'}<input id="pxo" placeholder="Outra opção? Escreva aqui (separe por vírgula)" aria-label="Outra opção" onchange="stkGrid()"><p class="hint">Marque as que valem para este produto. Marque pelo menos uma. O estoque é informado por opção. Opções novas entram na lista automaticamente.</p>`})():'')
+ +(on('stock')?(()=>{const sz=ep&&parseOpts(ep.sizes).length?szOf(ep):[],v=ep?(hasStk(ep)?ep.stk:(sz.length===1?{[sz[0]]:ep.stock}:{})):{};
+  return `<label>${L('stock')}</label><div id="pstk">${stkHtml(sz,v)}</div>${ep&&!hasStk(ep)&&ep.stock>0?`<p class="hint err">Este produto tem ${ep.stock} peças no total, ainda sem divisão. Marque as opções e distribua nos campos acima.</p>`:''}`})():'')
+ +(['brand','desc','specs'].some(on)?`<details class="fold more" ${ep&&(ep.brand||ep.desc||String(ep.specs||'').trim())?'open':''}><summary>Mais detalhes (marca, descrição...)</summary><div class="foldb">`:'')
  +(on('brand')?`<label>${L('brand')}</label><input id="pm" placeholder="Ex.: Nike, Zara..." value="${esc(ep?ep.brand:'')}">`:'')
  +(on('desc')?`<label>${L('desc')}</label><textarea id="pd" rows="4" placeholder="Conte sobre o produto: modelo, caimento, cuidados...">${esc(ep?ep.desc:'')}</textarea>`:'')
  +(on('specs')?`<label>${L('specs')}</label><textarea id="px" rows="6" spellcheck="false">${esc(ep&&String(ep.specs||'').trim()?ep.specs:SPEC_TPL())}</textarea><p class="hint">Complete depois dos dois pontos. Linha sem preenchimento não aparece na loja.</p>`:'')
+ +(['brand','desc','specs'].some(on)?'</div></details>':'')
  +(on('img')?`<label>${L('img')}</label>${ep&&ep.img?'<div class="tag">Já tem foto. Escolha outra só se quiser trocar.</div>':''}<input type="file" accept="image/*" onchange="pickImg(this)"><span id="imgok" class="tag"></span>`:'')
- +`<div class="row"><button class="btn" onclick="addProd()">${ep?'Salvar alterações':'Salvar produto'}</button>${ep?'<button class="btn ghost" onclick="cancelEdit()">Cancelar</button>':''}</div>`;
+ +`<div class="row"><button class="btn" onclick="addProd()">${ep?'Salvar alterações':'Salvar produto'}</button><button class="btn ghost" onclick="cancelEdit()">Cancelar</button></div>`;
 }
 function vConfig(){
  const c=cfgOf(),keys=Object.keys(FDEF).filter(k=>!(k==='gen'&&aarea==='importados'));
  return `<div class="two"><div><h3>Campos do cadastro de produto</h3><p class="hint">Painel ${AREAS[aarea].name}. Escreva um novo nome para trocar o título do campo e desmarque "Mostrar" para esconder. Deixando em branco, vale o nome original.</p>
- ${keys.map(k=>{const req=FREQ.includes(k),cur=(c.f&&c.f[k]&&c.f[k].l)||'';return `<div class="cfr"><div class="cfl"><label for="cf-${k}">${esc(FDEF[k])}</label><input id="cf-${k}" value="${esc(cur)}" placeholder="${esc(FDEF[k])}" maxlength="40"></div>${req?'<span class="cfreq">Obrigatório</span>':`<label class="cfs"><input type="checkbox" id="cfs-${k}" ${fc(k).on?'checked':''}>Mostrar</label>`}</div>`}).join('')}
+ ${keys.map(k=>{const req=FREQ.includes(k),cur=(c.f&&c.f[k]&&c.f[k].l)||'';return `<div class="cfr"><div class="cfl"><label for="cf-${k}">${esc(fdef(k))}</label><input id="cf-${k}" value="${esc(cur)}" placeholder="${esc(fdef(k))}" maxlength="40"></div>${req?'<span class="cfreq">Obrigatório</span>':`<label class="cfs"><input type="checkbox" id="cfs-${k}" ${fc(k).on?'checked':''}>Mostrar</label>`}</div>`}).join('')}
  <div class="row"><button class="btn" onclick="saveCfg()">Salvar configurações</button><button class="btn ghost" onclick="resetCfg()">Restaurar padrão</button></div></div>
  <div><h3>Opções do produto</h3><p class="hint">É a lista que aparece para marcar no cadastro, como tamanhos das roupas ou sabores.</p><label for="cf-optn">Nome da opção (aparece na loja)</label><input id="cf-optn" value="${esc((c.opt&&c.opt.name)||'')}" placeholder="Tamanho" maxlength="30"><label for="cf-optl">Lista de opções (uma por linha)</label><textarea id="cf-optl" rows="9" spellcheck="false" placeholder="Ex.: Chocolate&#10;Morango&#10;Baunilha">${esc(optCfg().list.join('\n'))}</textarea><p class="hint">Exemplos: PP, P, M, G, GG para roupas. Para importados, o nome pode ser "Sabor" e a lista os sabores.</p></div>
  <div><h3>Modelo do campo Detalhes</h3><p class="hint">Estas linhas já vêm escritas ao cadastrar um produto novo. Uma por linha: escreva só o nome (ex.: Gola) e o dois-pontos entra sozinho. Apague tudo para o campo vir em branco.</p><textarea id="cf-tpl" rows="10" spellcheck="false">${esc(typeof c.tpl==='string'?c.tpl:DEF_TPL())}</textarea><p class="hint">Cada linha preenchida aparece na página do produto, na loja.</p></div></div>`;
@@ -546,29 +642,48 @@ function vConfig(){
 function saveCfg(){
  S.cfg=S.cfg||{};const f={};
  Object.keys(FDEF).forEach(k=>{const e=$('#cf-'+k);if(!e)return;const l=e.value.trim(),ck=$('#cfs-'+k),o={};
-  if(l&&l!==FDEF[k])o.l=l;if(!FREQ.includes(k)&&ck&&!ck.checked)o.h=1;if(o.l||o.h)f[k]=o});
+  if(l&&l!==fdef(k))o.l=l;if(!FREQ.includes(k)&&ck&&!ck.checked)o.h=1;if(o.l||o.h)f[k]=o});
  const tpl=$('#cf-tpl').value.split(/\r?\n/).map(x=>x.replace(/[:\s]+$/,'').trim()).filter(Boolean).map(x=>x+': ').join('\n');
  const opt={name:($('#cf-optn').value.trim()),list:parseOpts($('#cf-optl').value)};
  S.cfg[aarea]={f,tpl,opt};save();render();toast('Configurações salvas.');
 }
 function resetCfg(){if(!confirm('Voltar aos nomes e ao modelo originais deste painel?'))return;if(S.cfg)delete S.cfg[aarea];save();render();toast('Configurações restauradas.')}
+let pform=false,mvOpen=false,mvP=null;
+/* histórico: marca movimentos de pedidos que foram cancelados ou excluídos */
+function mvTag(m){
+ const r=/^(Pedido|Cancelamento|Exclusão do pedido) (BN\d+)/.exec(m.note||'');if(!r)return {};
+ if(r[1]!=='Pedido')return {back:'Devolução ao estoque'};
+ const o=S.orders.find(x=>x.id===r[2]);
+ if(!o)return {v:'Pedido excluído'};
+ if(o.status==='Cancelado')return {v:'Pedido cancelado'};
+ return {};
+}
+const mvRow=m=>{const t=mvTag(m),z=m.size&&m.size!=='Único'?m.size:'',en=m.type==='entrada',vd=!en&&/^Venda na loja/.test(m.note||'');
+ return `<div class="mvr${t.v?' void':''}"><span class="mvb ${en?'in':vd?'sale':'out'}">${en?'Entrada':vd?'Venda':'Saída'}</span><div class="mvn"><b>${esc(m.name)}${z?' <span class="szc">'+esc(z)+'</span>':''}</b><small>${esc(m.date)}${m.note?' · '+esc(m.note):''}</small>${t.v?`<span class="mvv">${t.v}</span>`:''}${t.back?`<span class="mvk">${t.back}</span>`:''}</div><div class="mvq">${en?'+':'−'}${m.qty}</div></div>`};
 function vAdmin(){
  if(!adminOk)return `<section><div class="wrap plogin" style="max-width:380px"><h2>Painel da loja</h2><p class="sub">${FBM?'Entre com o e-mail e a senha da loja.':'Digite o PIN para entrar.'}</p><form onsubmit="event.preventDefault();adminLogin()" novalidate>${FBM?`<input id="aem" type="email" value="${esc(aemv)}" placeholder="E-mail" aria-label="E-mail" autocomplete="username">`:''}<div class="pw"><input id="pin" type="password" placeholder="${FBM?'Senha':'PIN'}" aria-label="${FBM?'Senha':'PIN'}" autocomplete="current-password"${FBM?'':' inputmode="numeric"'}><button type="button" class="pwb" onclick="togglePw()" aria-label="Mostrar senha" title="Mostrar senha"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div><button class="btn" type="submit">Entrar</button></form><p class="err" role="alert">${msg}</p><a class="fgt" href="https://wa.me/5546999711937?text=${encodeURIComponent('Olá! Esqueci a senha do painel da Bonely Store. Pode me ajudar?')}" target="_blank" rel="noopener">Esqueci a senha</a>${FBM?'':'<small class="tag">PIN da prévia: 1234</small>'}</div></section>`;
  if(!aarea)return '<section><div class="wrap" style="min-height:50vh"></div></section>';
  const pend=AO().filter(o=>o.status===STATUS[0]).length;
  let body='';
  if(atab==='produtos'){
-  const l=AP().filter(aMatch),ep=aedit?S.products.find(x=>x.id==aedit):null;
-  body=`<div class="two"><div><h3>${ep?'Editar produto':'Novo produto'}</h3>${prodForm(ep)}</div>
-  <div>${aSearch('Buscar produto pelo nome')}<div class="scroll"><table><tr><th>Produto</th><th>Preço</th><th>Estoque</th><th></th></tr>${l.map(p=>`<tr><td><div class="pnm"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div>${esc(p.name)}<div class="tag">${p.type==='avulso'?'importado':p.type}${p.coll?' · '+esc(p.coll):''}</div></div></div></td><td>${money(p.price)}</td><td class="${p.stock<=3?'err':''}">${p.stock}</td><td><div class="row" style="margin:0"><button class="btn sm ghost" onclick="editProd(${p.id})">Editar</button><button class="btn sm ghost danger" onclick="delProd(${p.id})">Excluir</button></div></td></tr>`).join('')}</table>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}</div></div></div>`;
+  const l=AP().filter(aMatch),ep=aedit?S.products.find(x=>x.id==aedit):null,open=!!(ep||pform);
+  body=`<div class="two"><div class="pform${open?' open':''}"><h3>${ep?'Editar produto':'Novo produto'}</h3>${prodForm(ep)}</div>
+  <div class="plistbox">${open?'':`<button class="btn mobnew" onclick="pform=true;render();scrollTo(0,0)">+ Novo produto</button>`}${aSearch('Buscar produto pelo nome')}<div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b><small>${[p.kind||(p.type==='avulso'?'Importado':''),p.coll,money(p.price)].filter(Boolean).map(esc).join(' · ')}</small><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=3?'err':''}">${p.stock}</b><small>em estoque</small></div><div class="pac"><button class="btn sm ghost" onclick="editProd(${p.id})">Editar</button><button class="btn sm ghost danger" onclick="delProd(${p.id})">Excluir</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}</div></div>`;
  }
  if(atab==='estoque'){
-  const l=AP().filter(aMatch),ent=AM().filter(m=>m.type==='entrada').reduce((a,m)=>a+m.qty,0),sai=AM().filter(m=>m.type==='saida').reduce((a,m)=>a+m.qty,0);
-  const st=[...AP()].sort((a,b)=>a.stock-b.stock).slice(0,12).map(p=>({l:p.name,v:p.stock,low:p.stock<=3}));
-  body=`<div class="tiles">${tile('Unidades em estoque',AP().reduce((a,p)=>a+p.stock,0))}${tile('Produtos cadastrados',AP().length)}${tile('Estoque baixo (3 ou menos)',AP().filter(p=>p.stock<=3).length)}${tile('Entradas (total)',ent)}${tile('Saídas (total)',sai)}</div>
-  <h3>Estoque por produto</h3>${hbars(st,v=>v+' un.')}
-  <div class="two" style="margin-top:24px"><div><h3>Entrada ou saída</h3>${aSearch('Buscar produto pelo nome')}<label>Produto</label><select id="mp">${l.map(p=>`<option value="${p.id}">${esc(p.name)} (${p.stock})</option>`).join('')}</select><label>Movimento</label><select id="mt"><option value="entrada">Entrada</option><option value="saida">Saída</option></select><label>Quantidade</label><input id="mq" type="number" min="1"><label>Observação</label><input id="mn"><div class="row"><button class="btn" onclick="addMove()">Registrar</button></div></div>
-  <div class="scroll"><h3>Histórico</h3>${AM().length?`<table><tr><th>Data</th><th>Produto</th><th>Mov.</th><th>Qtd</th><th>Obs.</th></tr>${AM().slice(0,60).map(m=>`<tr><td>${m.date}</td><td>${esc(m.name)}</td><td>${m.type==='entrada'?'Entrada':'Saída'}</td><td>${m.qty}</td><td>${esc(m.note)}</td></tr>`).join('')}</table>`:'<div class="empty">Nenhuma movimentação ainda.</div>'}</div></div>`;
+  const all=AP(),l=all.filter(aMatch),mp=all.find(p=>p.id==mvP)||l[0]||all[0],
+   zero=all.reduce((a,p)=>a+(hasStk(p)?Object.values(p.stk).filter(v=>!(+v>0)).length:0),0);
+  body=`<div class="tiles">${tile('Peças em estoque',all.reduce((a,p)=>a+p.stock,0))}${tile('Produtos',all.length)}${tile('Estoque baixo',all.filter(p=>p.stock<=3).length)}${tile(SZ().p+' zerados',zero)}</div>
+  <details class="fold" ${mvOpen?'open':''} ontoggle="mvOpen=this.open"><summary>Registrar entrada ou saída</summary><div class="foldb">
+   <label>Produto</label><select id="mp" onchange="mvP=this.value;mvSizes();mvType()">${all.map(p=>`<option value="${p.id}" ${mp&&p.id==mp.id?'selected':''}>${esc(p.name)} (${p.stock})</option>`).join('')}</select>
+   <label>${SZ().s}</label><select id="ms">${mvOpts(mp)}</select>
+   <div class="fg2"><div><label>Movimento</label><select id="mt" onchange="mvType()"><option value="entrada">Entrada (chegou peça)</option><option value="venda">Venda fora do site (entra como venda)</option><option value="saida">Perda ou ajuste (só baixa o estoque)</option></select></div><div><label>Quantidade</label><input id="mq" type="number" min="1" inputmode="numeric"></div></div>
+   <div id="msale" style="display:none"><div class="fg2"><div><label>Valor de cada peça (R$)</label><input id="mv" type="number" step="0.01" min="0" inputmode="decimal" value="${mp?mp.price:''}"></div><div><label>Forma de pagamento</label><select id="mpay"><option>Pix</option><option>Dinheiro</option><option>Cartão de crédito</option><option>Cartão de débito</option></select></div></div><label>Cliente (opcional)</label><input id="mcl" placeholder="Nome de quem comprou"><p class="tag">A venda entra como Entregue, no faturamento, nos mais vendidos e na meta.</p></div>
+   <label>Observação (opcional)</label><input id="mn">
+   <div class="row"><button class="btn" onclick="addMove()">Registrar</button></div></div></details>
+  <h3 class="sec">Estoque por ${SZ().s.toLowerCase()}</h3>${aSearch('Buscar produto pelo nome')}
+  <div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=3?'err':''}">${p.stock}</b><small>total</small></div><div class="pac"><button class="btn sm ghost" onclick="mvP=${p.id};mvOpen=true;render();scrollTo(0,0)">Movimentar</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}
+  <h3 class="sec">Histórico</h3>${AM().length?`<div class="mvl">${AM().slice(0,60).map(mvRow).join('')}</div>`:'<div class="empty">Nenhuma movimentação ainda.</div>'}`;
  }
  if(atab==='vendas'){
   const a=rangeStart(vper),inR=paidOrders().filter(o=>oTs(o)>=a),tot=sumT(inR),wait=AO().filter(o=>o.status===STATUS[0]),gi=goalInfo();
@@ -586,8 +701,8 @@ function vAdmin(){
   const cnt=st=>AO().filter(o=>o.status===st).length,k=aq.trim().toLowerCase();
   const l=AO().filter(o=>(ofil==='Todos'||o.status===ofil)&&(!k||o.id.toLowerCase().includes(k)||o.customer.name.toLowerCase().includes(k)));
   body=`<div class="pills">${['Todos',...STATUS].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?AO().length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
-  ${l.length?l.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id} · ${esc(o.customer.name)}</b><span class="st" data-s="${o.status}">${o.status}</span></div><div class="tag">${o.date} · ${esc(o.customer.phone)} · ${esc(o.customer.addr)} · CEP ${esc(o.customer.cep)}</div>${o.items.map(i=>`<div class="tag">${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</div>`).join('')}<div class="price">${money(o.total)} <span class="tag">(frete ${esc(o.ship.name)} ${money(o.ship.price)}) · Pagamento: ${esc(o.pay||'a combinar')}</span></div>
-  <div class="row">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select><input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
+  ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st" data-s="${o.status}">${o.status}</span></div><div class="ordm">${o.store?'<span class="ordk">Venda na loja</span>':''}<span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}${o.store?'':`<span>${esc(o.customer.addr)}${o.customer.cep?' · CEP '+esc(o.customer.cep):''}</span>`}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${i.size?' ('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>${o.store?'':'Frete '+esc(o.ship.name)+' '+money(o.ship.price)+' · '}Pagamento: ${esc(o.pay||'a combinar')}</small></div>
+  <div class="row ordact">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select>${o.store?'':`<input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>`}${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
  }
  if(atab==='combos'){
   const l=AP().filter(p=>aMatch(p)||cbSel.includes(p.id));
@@ -597,7 +712,7 @@ function vAdmin(){
  }
  if(atab==='config')body=vConfig();
  if(atab==='compartilhados')body=vShareAdmin();
- return `<section><div class="wrap"><div class="tabs" style="margin-top:0">${ATABS().map(([k,l])=>`<button class="${atab===k?'on':''}" onclick="atab='${k}';aq='';aedit=null;render()">${l}${k==='pedidos'&&pend?' ('+pend+')':''}</button>`).join('')}</div>${body}</div></section>
+ return `<section><div class="wrap"><div class="tabs" style="margin-top:0">${ATABS().map(([k,l])=>`<button class="${atab===k?'on':''}" onclick="atab='${k}';aq='';aedit=null;pform=false;render()">${l}${k==='pedidos'&&pend?' ('+pend+')':''}</button>`).join('')}</div>${body}</div></section>
 `;
 }
 function vCart(){
@@ -630,10 +745,17 @@ const IC={
  mail:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>',
  ig:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><path d="M17.5 6.5h.01"/></svg>'
 };
+/* acesso escondido ao painel: 5 toques seguidos na logo do rodapé (dentro de 3 segundos) */
+var _at=0,_atm=0;
+function admTap(){
+ if(!FBM||window.STATIC_PAGE)return;
+ clearTimeout(_atm);_at++;_atm=setTimeout(()=>{_at=0},3000);
+ if(_at>=5){_at=0;go('admin')}
+}
 function vFooter(){
  return `<footer><div class="wrap">
  <div class="fgrid">
- <div><img class="flogo" src="${LOGO}" alt="Bonely Store"><p class="fabout">Bem-vindo(a) à Bonely Store. ${IMP?'Produtos importados selecionados, com entrega em cidades da região ou retirada.':'Moda feminina e masculina com peças selecionadas e envio para todo o Brasil.'}</p></div>
+ <div><img class="flogo" src="${LOGO}" alt="Bonely Store" onclick="admTap()"><p class="fabout">Bem-vindo(a) à Bonely Store. ${IMP?'Produtos importados selecionados, com entrega em cidades da região ou retirada.':'Moda feminina e masculina com peças selecionadas e envio para todo o Brasil.'}</p></div>
  <div><h3>Categorias</h3><button class="lk" onclick="q='';cat('Feminino')">Feminino</button><button class="lk" onclick="q='';cat('Masculino')">Masculino</button><a class="lk" href="${pageUrl('importados')}">Importados</a></div>
  <div><h3>Institucional</h3><a class="lk" href="${pageUrl('privacidade')}">Política de Privacidade</a><a class="lk" href="${pageUrl('cancelamento')}">Política de Cancelamento e Trocas</a></div>
  <div><h3>Minhas compras</h3><button class="lk" onclick="${acct()}">Minha conta</button>${IMP?'':`<button class="lk" onclick="go('rastreio')">Rastrear pedido</button>`}${IMP?'':`<button class="lk" onclick="modal='frete';render()">Simular frete</button>`}</div>
@@ -659,6 +781,7 @@ function render(){
  <button class="cartbtn" onclick="cartOpen=true;render()" aria-label="Carrinho, ${n} itens">${IC.cart}${n?`<b>${n}</b>`:''}</button></div></header>`}
  <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel?'':vFooter()}${vCart()}${vMenu()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><a class="fab wa" href="https://wa.me/${WA}" target="_blank" rel="noopener" aria-label="WhatsApp">${IC.wa}</a></div>`}`;
  if(panel&&adminOk&&!modal)setTimeout(checkNew,0);
+ if(panel&&adminOk){const b=document.querySelector('.tabs button.on'),t=b&&b.parentElement;if(t)t.scrollLeft=b.offsetLeft-(t.clientWidth-b.offsetWidth)/2}
 }
 if(window.addEventListener)window.addEventListener('storage',e=>{
  if(FBM||e.key!==K||!e.newValue)return;

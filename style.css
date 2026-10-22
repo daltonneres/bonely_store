@@ -493,3 +493,270 @@ body.is-panel .opt input:checked+span:before{content:"✓";font-size:13px}
 body.is-panel .opt input:focus-visible+span{outline:2px solid var(--gold);outline-offset:2px}
 body.is-panel .chkact{display:flex;gap:16px;margin:4px 0 12px}
 body.is-panel .chkact .a-link{background:none;border:0;padding:0;color:var(--gold2);font-size:13px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+
+/* estoque por tamanho (painel) */
+body.is-panel .stkg{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;margin:4px 0}
+body.is-panel label.stkc{display:flex;flex-direction:column;gap:5px;margin:0;font-size:13px;letter-spacing:0;color:var(--mut);text-align:center}
+body.is-panel .stkc input{text-align:center;padding:9px 6px;min-width:0}
+body.is-panel .hint.err:before{content:"! ";color:var(--err)}
+body.is-panel .szc{display:inline-block;margin:2px 4px 2px 0;padding:3px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;line-height:1.5;color:var(--tx);white-space:nowrap}
+body.is-panel .szc.low{border-color:#d9a441;color:#d9a441}
+body.is-panel .szc.out{border-color:var(--err);color:var(--err)}
+body.is-panel .szr{margin-top:5px;display:flex;flex-wrap:wrap}
+
+
+/* ==========================================================================
+   Painel v2: listas em cartões (sem tabelas cortadas), estoque e histórico, celular
+   ========================================================================== */
+body.is-panel h3{font-size:21px}
+body.is-panel h3.sec{margin:30px 2px 12px}
+body.is-panel .two:has(.pform){grid-template-columns:minmax(0,5fr) minmax(0,7fr);align-items:start}
+body.is-panel .mobnew{display:none}
+
+/* lista de produtos / estoque */
+body.is-panel .plist{display:flex;flex-direction:column;gap:10px}
+body.is-panel .pit{display:grid;grid-template-columns:46px minmax(0,1fr) auto auto;align-items:center;gap:8px 14px;padding:12px 14px;background:#12100c;border:1px solid var(--line);border-radius:14px;transition:border-color .2s,background .2s}
+body.is-panel .pit:hover{border-color:rgba(201,162,95,.4);background:#15120d}
+body.is-panel .pin{min-width:0}
+body.is-panel .pin b{display:block;font-weight:500;font-size:15.5px;color:var(--tx);overflow-wrap:anywhere}
+body.is-panel .pin small{display:block;margin-top:2px;font-size:13px;color:var(--mut)}
+body.is-panel .pin .szr{margin-top:6px}
+body.is-panel .pst{text-align:center;min-width:56px}
+body.is-panel .pst b{display:block;font:500 26px/1 'Cormorant Garamond',serif;color:var(--gold2)}
+body.is-panel .pst b.err{color:var(--err)}
+body.is-panel .pst small{display:block;margin-top:2px;font-size:11.5px;color:var(--mut)}
+body.is-panel .pac{display:flex;gap:8px}
+
+/* bloco que abre e fecha (registrar entrada/saída) */
+body.is-panel .fold{background:var(--bg2);border:1px solid var(--line);border-radius:14px}
+body.is-panel .fold[open]{border-color:rgba(201,162,95,.45)}
+body.is-panel .fold summary{display:flex;justify-content:space-between;align-items:center;padding:15px 18px;cursor:pointer;list-style:none;font-size:16px;color:var(--gold2)}
+body.is-panel .fold summary::-webkit-details-marker{display:none}
+body.is-panel .fold summary:after{content:"+";font-size:24px;line-height:1;color:var(--gold)}
+body.is-panel .fold[open] summary{border-bottom:1px solid var(--line)}
+body.is-panel .fold[open] summary:after{content:"\2212"}
+body.is-panel .foldb{padding:2px 18px 18px}
+body.is-panel .fg2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* histórico */
+body.is-panel .mvl{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;background:#12100c;overflow:hidden}
+body.is-panel .mvr{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(46,39,29,.7)}
+body.is-panel .mvr:last-child{border-bottom:0}
+body.is-panel .mvb{padding:4px 0;border:1px solid;border-radius:999px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;text-align:center}
+body.is-panel .mvb.in{color:#8fb08a;border-color:rgba(143,176,138,.45);background:rgba(143,176,138,.1)}
+body.is-panel .mvb.out{color:#e2b45a;border-color:rgba(226,180,90,.45);background:rgba(226,180,90,.1)}
+body.is-panel .mvn{min-width:0}
+body.is-panel .mvn b{display:block;font-weight:500;font-size:15px;overflow-wrap:anywhere}
+body.is-panel .mvn small{display:block;margin-top:2px;font-size:12.5px;color:var(--mut)}
+body.is-panel .mvq{font:500 24px 'Cormorant Garamond',serif;color:var(--tx)}
+body.is-panel .mvv,body.is-panel .mvk{display:inline-block;margin-top:6px;padding:2px 10px;border:1px solid;border-radius:999px;font-size:11.5px;letter-spacing:.03em}
+body.is-panel .mvv{color:var(--err);border-color:rgba(217,128,107,.55);background:rgba(217,128,107,.1)}
+body.is-panel .mvk{color:var(--gold2);border-color:rgba(201,162,95,.45);background:rgba(201,162,95,.08)}
+/* pedido cancelado ou excluído: tudo riscado e apagado */
+body.is-panel .mvr.void .mvn b,body.is-panel .mvr.void .mvn small,body.is-panel .mvr.void .mvq{text-decoration:line-through;text-decoration-thickness:1.5px;color:#6f6657}
+body.is-panel .mvr.void .mvb,body.is-panel .mvr.void .szc{opacity:.45}
+
+/* pedidos */
+body.is-panel .card.in .row>select,body.is-panel .card.in .row>input{flex:1 1 150px;min-width:0}
+
+@media (max-width:700px){
+ body.is-panel .two:has(.pform){grid-template-columns:1fr}
+ body.is-panel .pform:not(.open){display:none}
+ body.is-panel .mobnew{display:flex;width:100%;margin-bottom:14px}
+}
+@media (max-width:640px){
+ body.is-panel .wrap{padding:0 14px}
+ body.is-panel .phd{flex-wrap:nowrap;gap:8px;padding-top:8px;padding-bottom:8px}
+ body.is-panel .phd .brand{font-size:15px;letter-spacing:.14em;line-height:1.2}
+ body.is-panel .phd .brand .sub2{font-size:8.5px;letter-spacing:.3em}
+ body.is-panel .phd .row{flex-wrap:nowrap;gap:6px}
+ body.is-panel .phd .btn{flex:none;padding:7px 10px;min-height:0;font-size:12.5px;letter-spacing:.01em}
+ body.is-panel .welcome{padding:16px 0 14px}
+ body.is-panel .welcome h1{font-size:25px}
+ body.is-panel .welcome p{margin:3px 0;font-size:14px}
+ body.is-panel .tabs{width:100%;margin:14px 0 16px;padding:4px}
+ body.is-panel .tabs button{padding:9px 14px;font-size:14px}
+ body.is-panel .pills{display:flex;flex-wrap:nowrap;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:4px;scrollbar-width:none}
+ body.is-panel .pills::-webkit-scrollbar{display:none}
+ body.is-panel .pills button{flex:none;white-space:nowrap}
+ body.is-panel .tiles{gap:10px;margin:0 0 6px}
+ body.is-panel .tile{padding:13px 14px}
+ body.is-panel .tile b{font-size:24px}
+ body.is-panel .pit{grid-template-columns:46px minmax(0,1fr) auto}
+ body.is-panel .pac{grid-column:1/-1}
+ body.is-panel .pac .btn{flex:1}
+ body.is-panel .fg2{grid-template-columns:1fr 1fr}
+ body.is-panel .mvr{grid-template-columns:64px minmax(0,1fr) auto;gap:10px;padding:11px 12px}
+ body.is-panel .mvb{font-size:10.5px}
+ body.is-panel .plistbox,body.is-panel .pform{padding:14px}
+ body.is-panel .card.in .row .btn{flex:1 1 auto}
+}
+body.is-panel .pin .szc{white-space:normal}
+@media (max-width:700px){body.is-panel .two>.plistbox{background:none;border:0;padding:0;border-radius:0}}
+body.is-panel .fold.more{margin-top:18px}
+body.is-panel .fold.more .foldb{padding-top:0}
+
+/* ==========================================================================
+   Painel v3: visual mais sofisticado, números e gráficos, pedidos em cartões, celular
+   ========================================================================== */
+body.is-panel{--gold3:#8a6b36;--card:linear-gradient(180deg,#1a150e 0,#13100c 100%);--ring:rgba(201,162,95,.28)}
+body.is-panel ::selection{background:rgba(201,162,95,.35)}
+body.is-panel{font-size:15.5px;-webkit-font-smoothing:antialiased}
+
+/* cabeçalho e boas-vindas */
+body.is-panel header{border-bottom-color:var(--ring)}
+body.is-panel .welcome{padding:38px 0 32px;background:radial-gradient(ellipse 60% 120% at 0 0,rgba(201,162,95,.14),transparent 60%),linear-gradient(135deg,#1f1810 0,rgba(13,11,9,0) 62%)}
+body.is-panel .welcome h1{background:linear-gradient(90deg,var(--gold2),#f6e6c3 60%,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+body.is-panel .welcome p:not(.meta){font-size:16.5px}
+body.is-panel .welcome .prog{max-width:560px;margin-top:12px}
+body.is-panel .welcome .meta{display:inline-block;padding:6px 14px;border:1px solid var(--ring);border-radius:999px;background:rgba(201,162,95,.07);font-size:14.5px}
+
+/* abas */
+body.is-panel .tabs{background:rgba(22,19,16,.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-color:var(--ring);box-shadow:0 10px 30px -22px #000;scroll-snap-type:x proximity}
+body.is-panel .tabs button{scroll-snap-align:start;min-height:42px;font-size:15px}
+
+/* cartões e blocos */
+body.is-panel .two>div,body.is-panel .plistbox,body.is-panel .pform{background:var(--card);border-color:rgba(201,162,95,.18);box-shadow:0 18px 40px -30px #000,inset 0 1px 0 rgba(255,255,255,.03)}
+body.is-panel h3{position:relative;letter-spacing:.01em}
+body.is-panel h3.sec{display:flex;align-items:center;gap:12px}
+body.is-panel h3.sec:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--ring),transparent)}
+body.is-panel .tag{color:var(--mut)}
+
+/* números (tiles) */
+body.is-panel .tiles{grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:14px;margin:6px 0 26px}
+body.is-panel .tile{padding:20px 20px 18px;border:1px solid rgba(201,162,95,.2);background:radial-gradient(120% 140% at 100% 0,rgba(201,162,95,.12),transparent 55%),var(--card);box-shadow:0 18px 36px -28px #000}
+body.is-panel .tile:before{height:3px;background:linear-gradient(90deg,var(--gold2),var(--gold3) 60%,transparent)}
+body.is-panel .tile small{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+body.is-panel .tile b{margin-top:8px;font-size:clamp(26px,4.4vw,36px);letter-spacing:-.01em;background:linear-gradient(180deg,#f6e6c3,var(--gold2));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* gráfico de vendas */
+body.is-panel .chart{position:relative;height:260px;padding:26px 16px 12px;gap:8px;background:var(--card);border-color:rgba(201,162,95,.2);box-shadow:0 18px 36px -28px #000}
+body.is-panel .chart .col{position:relative;cursor:default}
+body.is-panel .chart .bw{border-bottom:1px solid rgba(201,162,95,.35);background:repeating-linear-gradient(180deg,transparent 0,transparent calc(25% - 1px),rgba(201,162,95,.1) calc(25% - 1px),rgba(201,162,95,.1) 25%)}
+body.is-panel .chart .b{min-height:3px;border-radius:7px 7px 2px 2px;box-shadow:0 0 18px -6px rgba(230,200,143,.5);transition:height .5s cubic-bezier(.2,.8,.2,1),filter .2s}
+body.is-panel .chart .l{font-size:11px;margin-top:8px}
+body.is-panel .chart .col:hover:after,body.is-panel .chart .col:focus-within:after{content:attr(title);position:absolute;left:50%;top:-6px;transform:translate(-50%,-100%);z-index:3;padding:6px 10px;border-radius:8px;background:#1d1710;border:1px solid var(--gold);color:var(--gold2);font-size:12px;white-space:nowrap;pointer-events:none;box-shadow:0 10px 24px -10px #000}
+body.is-panel .hb{grid-template-columns:minmax(90px,200px) 1fr auto;gap:14px;margin:14px 0}
+body.is-panel .hb .hl{font-size:14.5px;color:var(--tx)}
+body.is-panel .hb .hv{color:var(--gold2);font-weight:500}
+body.is-panel .hb .ht{height:12px}
+body.is-panel .prog{height:12px}
+
+/* pedidos em cartões */
+body.is-panel .ord{padding:0!important;overflow:hidden;background:var(--card);border-color:rgba(201,162,95,.2)}
+body.is-panel .ordh{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 18px 12px}
+body.is-panel .ordid{display:block;font:500 24px/1.1 'Cormorant Garamond',serif;color:var(--gold2)}
+body.is-panel .ordc{display:block;margin-top:3px;font-size:15px;color:var(--tx)}
+body.is-panel .ordm{padding:0 18px 12px;font-size:13px;color:var(--mut);display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}
+body.is-panel .ordk{display:inline-block;padding:2px 10px;border:1px solid rgba(111,194,142,.5);border-radius:999px;background:rgba(111,194,142,.1);color:#8fd4a8;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase}
+body.is-panel .ordi{margin:0 18px;border-top:1px solid var(--line);padding:6px 0}
+body.is-panel .ordi div{display:flex;justify-content:space-between;gap:12px;padding:7px 0;font-size:14.5px}
+body.is-panel .ordi div span:last-child{color:var(--mut);white-space:nowrap}
+body.is-panel .ordt{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 18px;padding:12px 0 14px;border-top:1px solid var(--line)}
+body.is-panel .ordt b{font:500 28px/1 'Cormorant Garamond',serif;color:var(--gold2)}
+body.is-panel .ordt small{font-size:12.5px;color:var(--mut)}
+body.is-panel .ord .row.ordact{margin:0;padding:14px 18px 16px;background:rgba(0,0,0,.22);border-top:1px solid var(--line);gap:10px}
+
+/* histórico: venda na loja */
+body.is-panel .mvb.sale{color:#8fd4a8;border-color:rgba(111,194,142,.5);background:rgba(111,194,142,.1)}
+
+/* pills de filtro */
+body.is-panel .pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+body.is-panel .pills button{min-height:38px}
+
+/* campos */
+body.is-panel input,body.is-panel select,body.is-panel textarea{min-height:46px;background:#0e0c09}
+body.is-panel .aq{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a8f7c' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-3.5-3.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:14px 50%;background-size:18px;padding-left:42px}
+body.is-panel .fold{background:var(--card);border-color:rgba(201,162,95,.25)}
+body.is-panel .fold summary{min-height:54px}
+body.is-panel .pit{background:var(--card);border-color:rgba(201,162,95,.14)}
+body.is-panel .pit:hover{transform:translateY(-1px);box-shadow:0 16px 30px -22px rgba(201,162,95,.5)}
+body.is-panel .pst b{font-size:30px}
+body.is-panel .empty{background:rgba(201,162,95,.03)}
+
+/* celular: alvos de toque maiores, sem zoom do iOS, números em 2 colunas */
+@media (max-width:640px){
+ body.is-panel{font-size:15px}
+ body.is-panel input,body.is-panel select,body.is-panel textarea{font-size:16px}
+ body.is-panel .btn,body.is-panel .btn.sm{min-height:44px}
+ body.is-panel .phd .btn{min-height:40px}
+ body.is-panel .welcome{padding:20px 0 18px}
+ body.is-panel .welcome h1{font-size:27px}
+ body.is-panel .tiles{grid-template-columns:1fr 1fr;gap:10px}
+ body.is-panel .tile{padding:15px 14px 13px}
+ body.is-panel .tile small{font-size:10.5px;letter-spacing:.09em}
+ body.is-panel .tile b{font-size:24px}
+ body.is-panel .chart{height:210px;padding:22px 10px 10px;gap:4px}
+ body.is-panel .chart .l{font-size:9.5px}
+ body.is-panel .hb{grid-template-columns:minmax(80px,120px) 1fr auto;gap:10px}
+ body.is-panel .ordh{padding:14px 14px 10px}
+ body.is-panel .ordm,body.is-panel .ordi,body.is-panel .ordt{margin-left:14px;margin-right:14px}
+ body.is-panel .ordm{margin:0 14px;padding:0 0 10px}
+ body.is-panel .ord .row.ordact{padding:12px 14px 14px}
+ body.is-panel .ord .row.ordact>*{flex:1 1 calc(50% - 10px)}
+ body.is-panel .ord .row.ordact>select,body.is-panel .ord .row.ordact>input{flex:1 1 100%}
+ body.is-panel .toast{width:max-content}
+ body.is-panel .pills{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-right:-14px;padding-right:14px}
+ body.is-panel .pills button{flex:none;white-space:nowrap}
+}
+
+/* ==========================================================================
+   Painel v4: mais compacto (menus e formulário de produtos) e celular mais organizado
+   ========================================================================== */
+body.is-panel .wrap{max-width:1040px}
+body.is-panel section{padding:32px 0 48px}
+body.is-panel .tabs{padding:4px;gap:2px;margin-bottom:20px;border-radius:12px}
+body.is-panel .tabs button{padding:7px 14px;min-height:38px;font-size:14px;border-radius:9px}
+body.is-panel .two:has(.pform){grid-template-columns:minmax(0,4.4fr) minmax(0,5.6fr);gap:18px}
+body.is-panel .pform{padding:18px 20px}
+body.is-panel .pform h3{font-size:20px;margin-bottom:2px}
+body.is-panel .pform label{margin:12px 0 5px;font-size:12.5px}
+body.is-panel input,body.is-panel select,body.is-panel textarea{min-height:42px;padding:9px 12px}
+body.is-panel .pform textarea{min-height:76px}
+body.is-panel .pform textarea#px{min-height:110px}
+body.is-panel .pform .hint{font-size:12.5px;margin-top:5px}
+body.is-panel .pform .chk{gap:6px}
+body.is-panel label.opt{margin:0}
+body.is-panel .opt span{min-width:40px;padding:6px 12px;font-size:13.5px}
+body.is-panel .chkact{margin:2px 0 8px}
+body.is-panel .stkg{grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:8px}
+body.is-panel .stkc input{padding:7px 4px;min-height:38px}
+body.is-panel .pform .row{margin-top:16px;gap:8px}
+body.is-panel .pit{padding:10px 12px;gap:6px 12px}
+body.is-panel .pth{width:42px;height:42px}
+body.is-panel .pst b{font-size:26px}
+body.is-panel .pac .btn{padding:6px 12px;min-height:36px}
+
+@media (max-width:640px){
+ body.is-panel section{padding:16px 0 36px}
+ body.is-panel .wrap{padding:0 12px}
+ body.is-panel .welcome{padding:14px 0 12px}
+ body.is-panel .welcome h1{font-size:23px}
+ body.is-panel .welcome p:not(.meta){display:none}
+ body.is-panel .welcome .meta{margin-top:6px;padding:4px 12px;font-size:13px;border-radius:12px}
+ body.is-panel .tabs{margin:0 0 14px;border-radius:12px}
+ body.is-panel .tabs button{min-height:38px;padding:7px 13px;font-size:14px}
+ body.is-panel .tiles{gap:8px;margin:0 0 14px}
+ body.is-panel .tile{padding:12px 12px 10px}
+ body.is-panel .tile b{font-size:22px;margin-top:4px}
+ body.is-panel h3.sec{margin:20px 0 10px;font-size:19px}
+ body.is-panel .two{gap:12px}
+ body.is-panel .two>div{padding:14px}
+ body.is-panel .pform{padding:14px}
+ body.is-panel .fold summary{min-height:48px;padding:12px 14px}
+ body.is-panel .foldb{padding:2px 14px 14px}
+ body.is-panel .pit{grid-template-columns:42px minmax(0,1fr) auto;padding:10px;gap:4px 10px;border-radius:12px}
+ body.is-panel .pst{min-width:44px}
+ body.is-panel .pst small{font-size:10.5px}
+ body.is-panel .pac{grid-column:1/-1;gap:8px;padding-top:8px;border-top:1px solid var(--line)}
+ body.is-panel .pac .btn{flex:1;min-height:38px}
+ body.is-panel .plist{gap:8px}
+ body.is-panel .mobnew{margin-bottom:10px}
+ body.is-panel .pills{margin-bottom:10px}
+ body.is-panel .aq{margin-bottom:12px}
+ body.is-panel .mvr{padding:10px}
+ body.is-panel .ord{margin-bottom:10px!important}
+ body.is-panel .ordid{font-size:21px}
+ body.is-panel .chart{margin-bottom:14px}
+}
+@media (max-width:700px){body.is-panel .two:has(.pform){grid-template-columns:minmax(0,1fr)}}
