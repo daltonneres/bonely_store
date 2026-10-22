@@ -182,7 +182,7 @@ const galD={},galI={};let galT=0,galX=0;
 function gallery(p){
  const l=pimgs(p);if(l.length<2)return ph(p);
  galD[p.id]=l;const i=Math.min(galI[p.id]||0,l.length-1);
- return `<div class="gal" data-id="${p.id}" ontouchstart="galX=event.touches[0].clientX" ontouchend="galSw(event,${p.id})"><div class="ph"><img id="galimg" src="${l[i]}" alt="${esc(p.name)}" onload="galStart()"></div><button type="button" class="gnav gp" onclick="galGo(${p.id},-1)" aria-label="Foto anterior">‹</button><button type="button" class="gnav gn" onclick="galGo(${p.id},1)" aria-label="Próxima foto">›</button><div class="gdots">${l.map((_,k)=>`<i class="${k===i?'on':''}" onclick="galSet(${p.id},${k})"></i>`).join('')}</div></div>`;
+ return `<div class="gal${ribTxt(p)?' hrb':''}" data-id="${p.id}" ontouchstart="galX=event.touches[0].clientX" ontouchend="galSw(event,${p.id})"><div class="ph"><img id="galimg" src="${l[i]}" alt="${esc(p.name)}" onload="galStart()">${rib(p)}</div><button type="button" class="gnav gp" onclick="galGo(${p.id},-1)" aria-label="Foto anterior">‹</button><button type="button" class="gnav gn" onclick="galGo(${p.id},1)" aria-label="Próxima foto">›</button><div class="gdots">${l.map((_,k)=>`<i class="${k===i?'on':''}" onclick="galSet(${p.id},${k})"></i>`).join('')}</div></div>`;
 }
 function galStart(){clearInterval(galT);galT=setInterval(()=>{const g=document.querySelector('.gal');if(!g){clearInterval(galT);return}galGo(+g.dataset.id,1)},5000)}
 function galSet(id,k){
@@ -200,6 +200,9 @@ function addProd(){
  if(!n||isNaN(pr))return alert('Informe nome e preço.');
  const v=id=>$(id)?$(id).value.trim():'';
  const has=id=>!!$(id),d={...(aedit?{}:{coll:'',sizes:'Único',brand:'',desc:'',specs:''}),name:n,price:pr,gen:$('#pg')?$('#pg').value:''};
+ if(has('#ptag')){const sv=$('#ptag').value,tg=sv==='__c'?v('#ptagc'):sv,old=tg==='Promoção'?parseFloat(String($('#pold').value).replace(',','.')):0;
+  if(tg==='Promoção'&&!(old>pr))return alert('Na promoção, o preço antigo precisa ser maior que o preço atual.');
+  d.tag=tg;d.oldPrice=old>0?old:0}
  if(has('#pc'))d.coll=v('#pc');if(has('#pk'))d.kind=v('#pk');if(has('#popts')){const ck=[...document.querySelectorAll('#popts .po:checked')].map(e=>e.value),ex=parseOpts(v('#pxo')).filter(x=>!ck.some(y=>y.toLowerCase()===x.toLowerCase()));
   if(!ck.length&&!ex.length)return alert('Marque ao menos uma opção em "'+fc('sizes').l+'" (tamanho ou sabor). O estoque é controlado por opção.');
   const nw=[...document.querySelectorAll('#popts .po[data-new]')].filter(e=>e.checked).map(e=>e.value),add=[...nw,...ex];
@@ -372,7 +375,7 @@ function prodUrl(p){
  return d+(p.type==='avulso'?'importados.html':'index.html')+'?p='+p.id;
 }
 const fmtWA=t=>esc(t).replace(/\*(.+?)\*/g,'<b>$1</b>');
-const pcard=p=>`<div class="pcard">${ph(p)}<div><b>${esc(p.name)}</b><div class="price">${money(p.price)}</div><div class="tag">Bonely Store${p.type==='avulso'?' · Importados':''}</div></div></div>`;
+const pcard=p=>`<div class="pcard">${ph(p)}<div><b>${esc(p.name)}</b><div class="price">${priceH(p)}</div><div class="tag">Bonely Store${p.type==='avulso'?' · Importados':''}</div></div></div>`;
 function shareMsg(p,name,loja){
  const u=prodUrl(p),pr=`*${p.name}*\n${money(p.price)}`;
  return loja?`Olá${name?', '+name:''}! 💛\nO produto que você deseja está disponível em nosso site ✨\n\n${pr}\n\nVeja aqui 👇\n${u}\n\nBonely Store`
@@ -411,7 +414,7 @@ function vProduto(){
  if(!p)return `<section><div class="wrap"><h2>Produto não encontrado</h2><p class="sub">Esse link pode estar desatualizado.</p><button class="btn" onclick="go('loja')">Ver catálogo</button></div></section>`;
  const imp=p.type==='avulso';
  return `<section><div class="wrap"><p class="backrow"><button class="backbtn" onclick="go('loja')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Voltar ao catálogo</button></p>
- <div class="pdp"><div class="card">${gallery(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.kind,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${money(p.price)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
+ <div class="pdp"><div class="card">${gallery(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.kind,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${priceH(p)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
  ${p.stock>0?`<label>${esc(optName(p))}</label><select id="sz${p.id}">${sizeOpts(p)}</select>${lowTag(p)}<div class="row"><button class="btn" onclick="addCart(${p.id})">Adicionar ao carrinho</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`:`<div class="tag err">Esgotado</div><div class="row"><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`}</div></div></div></section>`;
 }
 function updPrev(){const p=curShareProd(),e=$('#amsg');if(p&&e)e.innerHTML=fmtWA(shareMsg(p,asn.trim(),1))}
@@ -449,7 +452,18 @@ async function enterAdmin(){
  FB.onerr=()=>toast('Não foi possível salvar na nuvem. Verifique a conexão.');
  FB.listen(S,()=>{if(view==='admin'&&adminOk&&!modal)render()});
 }
-const ph=p=>`<div class="ph">${p.img?`<img src="${p.img}" alt="${esc(p.name)}">`:'B'}</div>`;
+/* ---- faixa no produto (promoção, edição limitada...) e preço antigo riscado ---- */
+const TAGS=['Promoção','Edição limitada','Novidade','Últimas peças'];
+const promoOn=p=>!!(p&&+p.oldPrice>+p.price);
+const priceH=p=>promoOn(p)?`<s class="old">${money(p.oldPrice)}</s><b class="nw">${money(p.price)}</b>`:money(p.price);
+const ribTxt=p=>{const t=String(p&&p.tag||'').trim();if(!t)return '';return t==='Promoção'&&promoOn(p)?'Promoção −'+Math.round((1-p.price/p.oldPrice)*100)+'%':t};
+const rib=p=>{const t=ribTxt(p);return t?`<span class="rb${p.tag==='Promoção'?' rb-promo':p.tag==='Edição limitada'?' rb-lim':''}">${esc(t)}</span>`:''};
+function tagForm(ep){
+ const t=ep&&ep.tag||'',pre=TAGS.includes(t),sel=!t?'':pre?t:'__c';
+ return `<label for="ptag">Faixa no produto</label><select id="ptag" onchange="tagSel()"><option value="">Nenhuma</option>${TAGS.map(x=>`<option ${sel===x?'selected':''}>${x}</option>`).join('')}<option value="__c" ${sel==='__c'?'selected':''}>Outra (escrever)</option></select><input id="ptagc" maxlength="18" placeholder="Texto da faixa (até 18 letras)" aria-label="Texto da faixa" value="${sel==='__c'?esc(t):''}" style="${sel==='__c'?'':'display:none'}"><div id="poldw" style="${t==='Promoção'?'':'display:none'}"><label for="pold">Preço antigo (R$)</label><input id="pold" type="number" min="0" step="0.01" value="${ep&&ep.oldPrice?ep.oldPrice:''}"><p class="hint">O preço acima vira o preço da promoção. O preço antigo aparece riscado na loja e a faixa mostra a porcentagem de desconto.</p></div>`;
+}
+function tagSel(){const v=$('#ptag').value;$('#ptagc').style.display=v==='__c'?'':'none';$('#poldw').style.display=v==='Promoção'?'':'none'}
+const ph=p=>`<div class="ph">${p.img?`<img src="${p.img}" alt="${esc(p.name)}">`:'B'}${rib(p)}</div>`;
 
 /* Views */
 function vCatsImp(){return `<nav class="cats" aria-label="Lojas"><div class="wrap"><button class="ctile imp" onclick="document.getElementById('cat').scrollIntoView({behavior:'smooth'})"><b>Importados</b><small>Você está aqui. Ver produtos</small><span aria-hidden="true">↓</span></button><a href="${pageUrl('index')}" class="ctile"><b>Moda</b><small>Feminino e masculino</small><span aria-hidden="true">→</span></a></div></nav>`}
@@ -466,7 +480,7 @@ function vLoja(){
  <section id="cat"><div class="wrap"><h2>${SEC==='importados'?'Importados':'Catálogo'}</h2><p class="sub">${q?`Resultados para “${esc(q)}” <button class="btn sm ghost" onclick="q='';render()">Limpar busca</button>`:(SEC==='importados'?'Produtos importados selecionados.':'Moda feminina e masculina.')}</p>
  ${IMP?kindBar():`<div class="pills impf">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';kindF='';render()">${l}</button>`).join('')}</div>${kindBar()}
  ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';kindF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];kindF='';render()">${esc(c)}</button>`).join('')}</div>`:''}`}
- ${list.length?`<p class="impcount">${list.length} ${list.length===1?(IMP?'produto':'peça'):(IMP?'produtos':'peças')}</p><div class="grid impgrid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><span class="cbadge">${esc(p.kind||(IMP?'Importado':p.gen)||'Moda')}</span><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${money(p.price)}</div>
+ ${list.length?`<p class="impcount">${list.length} ${list.length===1?(IMP?'produto':'peça'):(IMP?'produtos':'peças')}</p><div class="grid impgrid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><span class="cbadge">${esc(p.kind||(IMP?'Importado':p.gen)||'Moda')}</span><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${priceH(p)}</div>
   ${p.stock>0?`<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${sizeOpts(p)}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${lowTag(p)}`:'<div class="tag err">Esgotado</div>'}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
  </div></section>
  ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid impgrid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
@@ -813,7 +827,7 @@ const cleanSpecs=t=>String(t||'').split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!
 function toast(t){const e=document.createElement('div');e.className='toast';e.setAttribute('role','status');e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2400)}
 function prodForm(ep){
  const L=k=>esc(fc(k).l),on=k=>fc(k).on;
- return `<label>${L('name')}</label><input id="pn" value="${esc(ep?ep.name:'')}"><label>${L('price')}</label><input id="pp" type="number" step="0.01" value="${ep?ep.price:''}"><input type="hidden" id="pt" value="${aarea==='importados'?'avulso':'roupa'}">`
+ return `<label>${L('name')}</label><input id="pn" value="${esc(ep?ep.name:'')}"><label>${L('price')}</label><input id="pp" type="number" step="0.01" value="${ep?ep.price:''}"><input type="hidden" id="pt" value="${aarea==='importados'?'avulso':'roupa'}">`+tagForm(ep)
  +(on('kind')?`<label>${L('kind')}</label><input id="pk" list="kl" placeholder="Ex.: Vestido, Blusa, Calça..." value="${esc(ep?ep.kind:'')}"><datalist id="kl">${kinds().map(k=>`<option value="${esc(k)}">`).join('')}</datalist>`:'')
  +(aarea==='importados'?'':`<label>${L('gen')}</label><select id="pg">${['Feminino','Masculino','Unissex'].map(g=>`<option ${ep&&ep.gen===g?'selected':''}>${g}</option>`).join('')}</select>`)
  +(on('coll')?`<label>${L('coll')}</label><input id="pc" list="cl" placeholder="Ex.: Verão 26" value="${esc(ep?ep.coll:'')}"><datalist id="cl">${S.colls.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>`:'')

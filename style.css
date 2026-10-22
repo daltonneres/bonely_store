@@ -866,3 +866,13 @@ body.is-panel .chk.editing label.opt{align-items:center}
 .gdots{position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:7px}
 .gdots i{width:8px;height:8px;border-radius:50%;background:rgba(239,230,214,.5);cursor:pointer;transition:background .2s,transform .2s}
 .gdots i.on{background:var(--gold);transform:scale(1.25)}
+
+/* faixa no produto e preço antigo */
+.ph{position:relative}
+.rb{position:absolute;left:0;right:0;bottom:0;z-index:2;text-align:center;padding:6px 8px;font:500 11px/1.2 'Jost',sans-serif;letter-spacing:.12em;text-transform:uppercase;background:var(--gold);color:#1a1409}
+.rb-promo{background:#b8473a;color:#fff}
+.rb-lim{background:#17130d;color:var(--gold2);border-top:1px solid var(--gold)}
+.pcard .rb{display:none}
+.gal.hrb .gdots{bottom:38px}
+.old{color:var(--mut);font-size:.72em;text-decoration:line-through;margin-right:8px;font-weight:400}
+.nw{font-weight:inherit}
