@@ -15,8 +15,8 @@ const cfg={
 const FB=window.FB={on:false,admin:false,loaded:false,user:null,onerr:null};
 let db,auth,F,U,listening=false,tm=0;
 const snap={};            // coleção -> Map(docId -> json canônico), para gravar só o que mudou
-const SYNC=['products','combos','orders','moves','shares'];
-const keyOf={products:x=>String(x.id),combos:x=>String(x.id),orders:x=>x.fid||x.id,moves:x=>x._id,shares:x=>x._id};
+const SYNC=['products','combos','orders','moves','shares','expenses'];
+const keyOf={products:x=>String(x.id),combos:x=>String(x.id),orders:x=>x.fid||x.id,moves:x=>x._id,shares:x=>x._id,expenses:x=>String(x.id)};
 
 const canon=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.keys(x).sort().reduce((o,k)=>(o[k]=x[k],o),{}):x);
 const clean=x=>JSON.parse(JSON.stringify(x));
@@ -105,7 +105,7 @@ FB.loadAdmin=async S=>{
     F.getDoc(dref('settings','public')),F.getDoc(dref('settings','admin')),F.getDoc(dref('counters','orders'))]);
   names.forEach((n,i)=>{S[n]=res[i].docs.map(d=>d.data())});
   const byId=(a,b)=>(a.id||0)-(b.id||0),byTs=(a,b)=>(b.ts||0)-(a.ts||0);
-  S.products.sort(byId);S.combos.sort(byId);S.orders.sort(byTs);S.moves.sort(byTs);S.shares.sort(byTs);
+  S.products.sort(byId);S.combos.sort(byId);S.orders.sort(byTs);S.moves.sort(byTs);S.shares.sort(byTs);S.expenses.sort(byTs);
   const pub=sp.exists()?sp.data():{},adm=sa.exists()?sa.data():{};
   S.colls=pub.colls||[];S.cfg=pub.cfg||{};
   S.goals=adm.goals||{};S.goal=adm.goal||0;S.seen=adm.seen||[];

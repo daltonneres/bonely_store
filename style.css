@@ -836,3 +836,17 @@ body.is-panel .opt .odel:hover{border-color:var(--err);color:var(--err)}
 body.is-panel .opt .oed:hover{border-color:var(--gold)}
 body.is-panel .chk.editing .oed,body.is-panel .chk.editing .odel{display:inline-flex}
 body.is-panel .chk.editing label.opt{align-items:center}
+
+/* receitas e despesas */
+.pos{color:#8fa58a}.neg{color:var(--err)}
+.tile b .pos,.tile b .neg{font:inherit}
+.xwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.xt td,.xt th{white-space:nowrap}.xt td:nth-child(2){white-space:normal;min-width:160px}
+.xc{display:block;color:var(--mut);font-size:12px;margin-top:2px}
+
+/* opções recolhidas */
+.selrow{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 6px;align-items:center}
+.selchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--gold);border-radius:999px;padding:4px 6px 4px 12px;font-size:13px;color:var(--gold2);background:rgba(201,162,95,.08)}
+.selchip button{background:none;border:0;color:var(--mut);font-size:16px;line-height:1;cursor:pointer;padding:0 4px}
+.selchip button:hover{color:var(--err)}
+.optl{margin-top:4px}

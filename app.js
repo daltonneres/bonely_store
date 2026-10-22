@@ -22,9 +22,10 @@ const demo=()=>({
   {id:4,name:'Brinco Estrela',price:59.9,type:'avulso',coll:'',sizes:'Único',stock:20,img:''},
   {id:5,name:'Necessaire Bonely',price:79.9,type:'avulso',coll:'',sizes:'Único',stock:2,img:''}],
  combos:[{id:1,name:'Combo Essencial',price:329.9,items:[2,3]}],
- orders:[],moves:[],customer:null,cart:[],seq:1000});
+ orders:[],moves:[],expenses:[],customer:null,cart:[],seq:1000});
 let S; try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
 if(!S)S=demo();
+if(!S.expenses)S.expenses=[];
 function CART(){return S[CK]||(S[CK]=[])}
 /* migra importados que ficaram no carrinho antigo (misturado) para o carrinho próprio */
 try{if(!S.cartImp)S.cartImp=[];const mv=(S.cart||[]).filter(i=>{const p=S.products.find(x=>x.id==i.key);return p&&p.type==='avulso'});if(mv.length){S.cartImp.push(...mv);S.cart=S.cart.filter(i=>!mv.includes(i));localStorage.setItem(K,JSON.stringify(S))}}catch(e){}
@@ -159,7 +160,8 @@ function addProd(){
  const has=id=>!!$(id),d={...(aedit?{}:{coll:'',sizes:'Único',brand:'',desc:'',specs:''}),name:n,price:pr,gen:$('#pg')?$('#pg').value:''};
  if(has('#pc'))d.coll=v('#pc');if(has('#pk'))d.kind=v('#pk');if(has('#popts')){const ck=[...document.querySelectorAll('#popts .po:checked')].map(e=>e.value),ex=parseOpts(v('#pxo')).filter(x=>!ck.some(y=>y.toLowerCase()===x.toLowerCase()));
   if(!ck.length&&!ex.length)return alert('Marque ao menos uma opção em "'+fc('sizes').l+'" (tamanho ou sabor). O estoque é controlado por opção.');
-  if(ex.length){S.cfg=S.cfg||{};const c=S.cfg[aarea]=S.cfg[aarea]||{f:{}},o=optCfg();c.opt={name:(c.opt&&c.opt.name)||'',list:[...o.list,...ex.filter(x=>!o.list.some(y=>y.toLowerCase()===x.toLowerCase()))]}}
+  const nw=[...document.querySelectorAll('#popts .po[data-new]')].filter(e=>e.checked).map(e=>e.value),add=[...nw,...ex];
+  if(add.length){S.cfg=S.cfg||{};const c=S.cfg[aarea]=S.cfg[aarea]||{f:{}},o=optCfg();c.opt={name:(c.opt&&c.opt.name)||'',list:[...o.list,...add.filter((x,i)=>add.findIndex(y=>y.toLowerCase()===x.toLowerCase())===i&&!o.list.some(y=>y.toLowerCase()===x.toLowerCase()))]}}
   d.sizes=[...ck,...ex].join(',')}if(has('#pm'))d.brand=v('#pm');if(has('#pd'))d.desc=v('#pd');if(has('#px'))d.specs=cleanSpecs(v('#px'));
  if(d.coll&&!S.colls.includes(d.coll))S.colls.push(d.coll);
  const epr=aedit?S.products.find(x=>x.id==aedit):null,szF=d.sizes?parseOpts(d.sizes):(epr?szOf(epr):['Único']),hasGrid=!!document.querySelector('.pqs'),nv={};
@@ -518,20 +520,72 @@ const sumT=a=>a.reduce((x,o)=>x+o.total,0);
 function monthRev(){const n=new Date(),a=new Date(n.getFullYear(),n.getMonth(),1).getTime();return sumT(paidOrders().filter(o=>oTs(o)>=a))}
 function goalInfo(){const g=goalVal(),m=monthRev();return {g,m,pct:g?Math.round(m/g*100):0}}
 function greet(){const h=new Date().getHours();return h<12?'Tenha um bom dia':h<18?'Tenha uma boa tarde':'Tenha uma boa noite'}
-function rangeStart(per){const n=new Date();return per==='14d'?new Date(n.getFullYear(),n.getMonth(),n.getDate()-13).getTime():new Date(n.getFullYear(),n.getMonth()-5,1).getTime()}
+const DAYS={'7d':7,'14d':14,'30d':30};
+function rangeStart(per){const n=new Date();return DAYS[per]?new Date(n.getFullYear(),n.getMonth(),n.getDate()-(DAYS[per]-1)).getTime():new Date(n.getFullYear(),n.getMonth()-5,1).getTime()}
 function series(per){
  const n=new Date(),pd=paidOrders(),out=[],inR=(a,b)=>sumT(pd.filter(o=>{const t=oTs(o);return t>=a&&t<b}));
- if(per==='14d'){for(let i=13;i>=0;i--){const d=new Date(n.getFullYear(),n.getMonth(),n.getDate()-i),a=d.getTime();out.push({l:String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'),v:inR(a,a+864e5)})}}
+ if(DAYS[per]){for(let i=DAYS[per]-1;i>=0;i--){const d=new Date(n.getFullYear(),n.getMonth(),n.getDate()-i),a=d.getTime();out.push({l:String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'),v:inR(a,a+864e5)})}}
  else{for(let i=5;i>=0;i--){const d=new Date(n.getFullYear(),n.getMonth()-i,1),e=new Date(d.getFullYear(),d.getMonth()+1,1);out.push({l:MES[d.getMonth()],v:inR(d.getTime(),e.getTime())})}}
  return out;
 }
-function bars(d){const mx=Math.max(...d.map(x=>x.v),1);return `<div class="chart" role="img" aria-label="Gráfico de vendas">${d.map(x=>`<div class="col" title="${x.l}: ${money(x.v)}"><div class="bw"><div class="b" style="height:${x.v/mx*100}%"></div></div><div class="l">${x.l}</div></div>`).join('')}</div>`}
+function bars(d){const mx=Math.max(...d.map(x=>x.v),1);return `<div class="chart" role="img" aria-label="Gráfico de vendas">${d.map((x,k)=>`<div class="col" title="${x.l}: ${money(x.v)}"><div class="bw"><div class="b" style="height:${x.v/mx*100}%"></div></div><div class="l">${d.length>16&&(d.length-1-k)%2?'':x.l}</div></div>`).join('')}</div>`}
 function hbars(items,fmt){const mx=Math.max(...items.map(x=>x.v),1);return items.length?items.map(x=>`<div class="hb"><span class="hl" title="${esc(x.l)}">${esc(x.l)}</span><span class="ht"><i class="${x.low?'low':''}" style="width:${Math.max(2,x.v/mx*100)}%"></i></span><span class="hv">${fmt(x.v)}</span></div>`).join(''):'<div class="empty">Sem dados ainda.</div>'}
 const tile=(l,v)=>`<div class="tile"><small>${l}</small><b>${v}</b></div>`;
 function aSearch(ph){return `<input id="aq" class="aq" value="${esc(aq)}" oninput="aq=this.value;keepFocus(this)" placeholder="${ph}" aria-label="${ph}">`}
 function keepFocus(el){const pos=el.selectionStart;render();const e=document.getElementById('aq');if(e){e.focus();try{e.setSelectionRange(pos,pos)}catch(_){}}}
 function saveGoal(){const v=parseFloat(String($('#goal').value).replace(',','.'));if(!(v>0))return alert('Informe um valor de meta maior que zero.');S.goals=S.goals||{};S.goals[aarea]=v;save();render()}
 function setPer(v){vper=v;render()}
+/* ---- Receitas e despesas (aba Vendas) ---- */
+const EXP_CATS=['Mercadoria / estoque','Frete e embalagem','Marketing e anúncios','Taxas e tarifas','Material e equipamento','Outros'];
+let xlim=30;
+const REC_CATS=['Venda fora do site','Aporte / investimento','Outras receitas'];
+const AE=()=>(S.expenses||[]).filter(x=>(x.area||'moda')===aarea);
+const AX=()=>AE().filter(x=>x.kind!=='in'),AI=()=>AE().filter(x=>x.kind==='in');
+function xKind(k){const e=$('#xcat');if(e)e.innerHTML=(k==='in'?REC_CATS:EXP_CATS).map(c=>`<option>${esc(c)}</option>`).join('')}
+const sumX=a=>a.reduce((t,x)=>t+(+x.val||0),0);
+const fmtD=ts=>new Date(ts).toLocaleDateString('pt-BR');
+const todayIso=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+function addExpense(){
+ const kind=$('#xkind')&&$('#xkind').value==='in'?'in':'out';
+ const desc=($('#xdesc').value||'').trim(),val=parseFloat(String($('#xval').value).replace(',','.')),cat=$('#xcat').value,iso=$('#xdate').value;
+ if(!desc)return alert(kind==='in'?'Descreva a receita. Ex.: venda no Instagram, aporte.':'Descreva a despesa. Ex.: embalagens, frete, anúncio.');
+ if(!(val>0))return alert('Informe um valor maior que zero.');
+ const m=String(iso||'').match(/^(\d+)-(\d+)-(\d+)$/),ts=m?new Date(+m[1],+m[2]-1,+m[3],12).getTime():Date.now();
+ if(!S.expenses)S.expenses=[];
+ S.expenses.unshift({id:'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ts,date:fmtD(ts),desc,cat,val:+val.toFixed(2),kind,area:aarea});
+ save();render();toast(kind==='in'?'Receita registrada.':'Despesa registrada.');
+}
+function delExpense(id){
+ if(!confirm('Excluir este lançamento?'))return;
+ S.expenses=(S.expenses||[]).filter(x=>x.id!==id);save();render();
+}
+function moreX(){xlim+=30;render()}
+/* extrato corrido: receitas (pedidos pagos) e despesas em ordem de data, com saldo acumulado */
+function ledger(){
+ const rows=[];
+ paidOrders().forEach(o=>rows.push({ts:oTs(o),kind:'in',desc:(o.store?'Venda na loja ':'Pedido ')+o.id+(o.customer&&o.customer.name&&!o.store?' · '+o.customer.name:''),val:o.total}));
+ AE().forEach(x=>rows.push({ts:x.ts||0,kind:x.kind==='in'?'in':'out',id:x.id,desc:x.desc,cat:x.cat,val:+x.val||0}));
+ rows.sort((a,b)=>a.ts-b.ts);
+ let bal=0;rows.forEach(r=>{bal+=r.kind==='in'?r.val:-r.val;r.bal=bal});
+ return rows.reverse();
+}
+function vFinance(a,tot){
+ const ex=AX().filter(x=>(x.ts||0)>=a),totX=sumX(ex),extra=sumX(AI().filter(x=>(x.ts||0)>=a)),led=ledger(),bal=led.length?led[0].bal:0;
+ tot+=extra;
+ const byCat={};ex.forEach(x=>{byCat[x.cat||'Outros']=(byCat[x.cat||'Outros']||0)+(+x.val||0)});
+ const cats=Object.entries(byCat).sort((p,q)=>q[1]-p[1]).map(([l,v])=>({l,v}));
+ const res=tot-totX;
+ return `<h3 class="sec">Receitas e despesas</h3>
+ <div class="tiles">${tile('Receitas no período',money(tot))}${tile('Despesas no período',money(totX))}${tile('Resultado do período',`<span class="${res<0?'neg':'pos'}">${money(res)}</span>`)}${tile('Saldo corrido (total)',`<span class="${bal<0?'neg':'pos'}">${money(bal)}</span>`)}</div>
+ <div class="two"><div><h3>Novo lançamento</h3>
+  <div class="row" style="margin-top:0"><select id="xkind" onchange="xKind(this.value)" aria-label="Tipo"><option value="out">Despesa (saída)</option><option value="in">Receita (entrada)</option></select></div>
+  <div class="row"><input id="xdesc" placeholder="Descrição (ex.: caixas de embalagem, venda no Instagram)" aria-label="Descrição da despesa"></div>
+  <div class="row"><input id="xval" type="number" min="0" step="0.01" placeholder="Valor (R$)" aria-label="Valor"><input id="xdate" type="date" value="${todayIso()}" aria-label="Data"></div>
+  <div class="row"><select id="xcat" aria-label="Categoria">${EXP_CATS.map(c=>`<option>${esc(c)}</option>`).join('')}</select><button class="btn" onclick="addExpense()">Adicionar</button></div></div>
+ <div><h3>Gastos por categoria</h3>${hbars(cats,money)}</div></div>
+ <h3>Extrato</h3>${led.length?`<div class="xwrap"><table class="xt"><tr><th>Data</th><th>Descrição</th><th>Receita</th><th>Despesa</th><th>Saldo</th><th></th></tr>${led.slice(0,xlim).map(r=>`<tr><td>${fmtD(r.ts)}</td><td>${esc(r.desc)}${r.cat?`<small class="xc">${esc(r.cat)}</small>`:''}</td><td class="pos">${r.kind==='in'?money(r.val):''}</td><td class="neg">${r.kind==='out'?'−'+money(r.val):''}</td><td class="${r.bal<0?'neg':''}"><b>${money(r.bal)}</b></td><td>${r.id?`<button class="btn sm ghost" onclick="delExpense('${r.id}')" aria-label="Excluir lançamento">Excluir</button>`:''}</td></tr>`).join('')}</table></div>${led.length>xlim?'<div class="row"><button class="btn sm ghost" onclick="moreX()">Ver mais</button></div>':''}`:'<div class="empty">Ainda não há receitas nem despesas. Cadastre seu primeiro lançamento acima.</div>'}`;
+}
+
 function togCb(id){cbSel=cbSel.includes(id)?cbSel.filter(x=>x!==id):[...cbSel,id]}
 function seedSales(){
  let r=7;const rnd=()=>{r=(r*9301+49297)%233280;return r/233280};
@@ -553,7 +607,7 @@ function dlBadge(o){if(!pendConf(o))return '';const ms=dueOf(o)-Date.now();retur
 let lowQ=[],dueQ=[],dueAck=[];
 const lowAck=()=>{try{return JSON.parse(localStorage.getItem('bn_lowack')||'[]')}catch(e){return []}};
 function lowList(){
- return S.products.map(p=>{
+ return S.products.filter(p=>(isImpP(p)?'importados':'moda')===aarea).map(p=>{
   const tot=+p.stock||0;
   if(tot>LOW)return null;
   const det=hasStk(p)?szOf(p).map(x=>x+' ('+stkQ(p,x)+')'):[];
@@ -571,7 +625,9 @@ function checkNew(){
  if(dd.length){dueQ=dueList().map(o=>o.id);modal='dueorder';render()}
 }
 function closeLow(ir){
- try{localStorage.setItem('bn_lowack',JSON.stringify(lowList().map(x=>x.key)))}catch(e){}
+ try{const mine=new Set(S.products.filter(p=>(isImpP(p)?'importados':'moda')===aarea).map(p=>String(p.id)));
+  const other=lowAck().filter(k=>!mine.has(String(k).split('|')[0]));
+  localStorage.setItem('bn_lowack',JSON.stringify([...other,...lowList().map(x=>x.key)]))}catch(e){}
  const f=lowQ[0];lowQ=[];modal='';
  if(ir&&f){aarea=f.area;atab='estoque';aq=''}
  render();if(ir)scrollTo(0,0);
@@ -646,6 +702,25 @@ function optDel(btn,ev){
  if(!inp.checked)lab.remove();
  save();toast('"'+old+'" saiu da lista.');
 }
+/* ---- opções (tamanhos/sabores): digitar adiciona, lista fica recolhida ---- */
+const selChips=l=>l.length?l.map(x=>`<span class="selchip">${esc(x)}<button type="button" data-v="${esc(x)}" onclick="optUn(this.dataset.v)" aria-label="Tirar ${esc(x)}">×</button></span>`).join(''):'<span class="hint">Nenhuma marcada ainda.</span>';
+function optSel(){
+ const ck=[...document.querySelectorAll('#popts .po:checked')].map(e=>e.value),b=$('#psel'),n=$('#poptsn');
+ if(b)b.innerHTML=selChips(ck);if(n)n.textContent=ck.length;
+}
+function optUn(v){const e=[...document.querySelectorAll('#popts .po')].find(x=>x.value===v);if(e){e.checked=false;stkGrid()}}
+function optAdd(){
+ const inp=$('#pxo'),box=$('#popts');if(!inp||!box)return;
+ parseOpts(inp.value).forEach(x=>{
+  const ex=[...box.querySelectorAll('.po')].find(e=>e.value.toLowerCase()===x.toLowerCase());
+  if(ex){ex.checked=true;return}
+  const lab=document.createElement('label');lab.className='opt';
+  lab.innerHTML=`<input type="checkbox" class="po" data-new="1" value="${esc(x)}" checked onchange="stkGrid()"><span>${esc(x)}</span><button type="button" class="oed" onclick="optRename(this,event)" aria-label="Renomear ${esc(x)}" title="Renomear">✎</button><button type="button" class="odel" onclick="optDel(this,event)" aria-label="Excluir ${esc(x)} da lista" title="Excluir da lista">×</button>`;
+  box.appendChild(lab);
+ });
+ inp.value='';stkGrid();
+}
+
 function optAll(v){document.querySelectorAll('#popts .po').forEach(e=>e.checked=v);stkGrid()}
 /* ---- estoque por tamanho no cadastro ---- */
 const KIND_DEF=['Vestido','Blusa','Camisa','Calça','Saia','Short','Jaqueta','Conjunto','Acessório'];
@@ -663,12 +738,14 @@ function stkSizes(){
  return [...ck,...ex];
 }
 function stkGrid(){
+ optSel();
  const box=$('#pstk');if(!box)return;
  const ep=aedit?S.products.find(x=>x.id==aedit):null,old={};
  box.querySelectorAll('.pqs').forEach(e=>old[e.dataset.s]=e.value);
  const base=ep?(hasStk(ep)?ep.stk:szOf(ep).length===1?{[szOf(ep)[0]]:ep.stock}:{}):{},v={},sz=stkSizes();
  sz.forEach(x=>{v[x]=x in old?old[x]:(x in base?base[x]:'')});
  box.innerHTML=stkHtml(sz,v);
+ const w=$('#pstkw');if(w)w.style.display=sz.length?'':'none';
 }
 /* grava o estoque novo e registra no histórico o que mudou em cada tamanho */
 function applyStk(p,ns,note){
@@ -687,7 +764,8 @@ function mvType(){const t=$('#mt'),b=$('#msale');if(!t||!b)return;b.style.displa
 function mvSizes(){const p=S.products.find(x=>x.id==$('#mp').value),e=$('#ms');if(e)e.innerHTML=mvOpts(p)}
 const DEF_TPL=()=>aarea==='importados'?'Material: \nCor: \nDimensões: \nOrigem: ':'Tecido: \nCor: \nModelagem: \nComposição: \nCuidados: ';
 const cfgOf=()=>((S.cfg||{})[aarea])||{};
-const fc=k=>{const c=(cfgOf().f||{})[k]||{};return {l:String(c.l||'').trim()||fdef(k),on:FREQ.includes(k)||!c.h}};
+const NOIMP=k=>aarea==='importados'&&(k==='kind'||k==='coll');
+const fc=k=>{const c=(cfgOf().f||{})[k]||{};return {l:String(c.l||'').trim()||fdef(k),on:FREQ.includes(k)||(!c.h&&!NOIMP(k))}};
 const SPEC_TPL=()=>{const t=cfgOf().tpl;return typeof t==='string'?t:DEF_TPL()};
 const cleanSpecs=t=>String(t||'').split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!/^[^:]+:\s*$/.test(x)).join('\n');
 function toast(t){const e=document.createElement('div');e.className='toast';e.setAttribute('role','status');e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2400)}
@@ -698,9 +776,10 @@ function prodForm(ep){
  +(aarea==='importados'?'':`<label>${L('gen')}</label><select id="pg">${['Feminino','Masculino','Unissex'].map(g=>`<option ${ep&&ep.gen===g?'selected':''}>${g}</option>`).join('')}</select>`)
  +(on('coll')?`<label>${L('coll')}</label><input id="pc" list="cl" placeholder="Ex.: Verão 26" value="${esc(ep?ep.coll:'')}"><datalist id="cl">${S.colls.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>`:'')
  +(on('sizes')?(()=>{const oc=optCfg(),cur=ep?parseOpts(ep.sizes).filter(x=>x.toLowerCase()!=='único'):[],all=[...oc.list,...cur.filter(x=>!oc.list.some(y=>y.toLowerCase()===x.toLowerCase()))],isOn=x=>cur.some(y=>y.toLowerCase()===x.toLowerCase());
-  return `<label>${L('sizes')}</label>${all.length?`<div class="chk" id="popts" role="group" aria-label="${L('sizes')}">${all.map(x=>`<label class="opt"><input type="checkbox" class="po" value="${esc(x)}" ${isOn(x)?'checked':''} onchange="stkGrid()"><span>${esc(x)}</span><button type="button" class="oed" onclick="optRename(this,event)" aria-label="Renomear ${esc(x)}" title="Renomear">✎</button><button type="button" class="odel" onclick="optDel(this,event)" aria-label="Excluir ${esc(x)} da lista" title="Excluir da lista">×</button></label>`).join('')}</div><div class="chkact"><button type="button" class="a-link" onclick="optAll(true)">Marcar todas</button><button type="button" class="a-link" onclick="optAll(false)">Limpar</button><button type="button" class="a-link" onclick="optEditMode(this)">Editar opções</button></div>`:'<div id="popts"></div>'}<input id="pxo" placeholder="Outra opção? Escreva aqui (separe por vírgula)" aria-label="Outra opção" onchange="stkGrid()"><p class="hint">Marque as que valem para este produto. Marque pelo menos uma. O estoque é informado por opção. Opções novas entram na lista automaticamente. Para renomear ou excluir uma opção, toque em "Editar opções".</p>`})():'')
- +(on('stock')?(()=>{const sz=ep&&parseOpts(ep.sizes).length?szOf(ep):[],v=ep?(hasStk(ep)?ep.stk:(sz.length===1?{[sz[0]]:ep.stock}:{})):{};
-  return `<label>${L('stock')}</label><div id="pstk">${stkHtml(sz,v)}</div>${ep&&!hasStk(ep)&&ep.stock>0?`<p class="hint err">Este produto tem ${ep.stock} peças no total, ainda sem divisão. Marque as opções e distribua nos campos acima.</p>`:''}`})():'')
+  const labels=all.map(x=>`<label class="opt"><input type="checkbox" class="po" value="${esc(x)}" ${isOn(x)?'checked':''} onchange="stkGrid()"><span>${esc(x)}</span><button type="button" class="oed" onclick="optRename(this,event)" aria-label="Renomear ${esc(x)}" title="Renomear">✎</button><button type="button" class="odel" onclick="optDel(this,event)" aria-label="Excluir ${esc(x)} da lista" title="Excluir da lista">×</button></label>`).join('');
+  return `<label>${L('sizes')}</label><input id="pxo" placeholder="Digite e aperte Enter (ex.: M, 42, Morango)" aria-label="Adicionar opção" autocomplete="off" onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();optAdd()}" onchange="optAdd()"><div class="selrow" id="psel">${selChips(cur)}</div><details class="fold optl"><summary>Ver lista de ${L('sizes')} <span class="a-mut">(<span id="poptsn">${cur.length}</span> marcados)</span></summary><div class="foldb"><div class="chk" id="popts" role="group" aria-label="${L('sizes')}">${labels}</div>${all.length?'<div class="chkact"><button type="button" class="a-link" onclick="optAll(true)">Marcar todas</button><button type="button" class="a-link" onclick="optAll(false)">Limpar</button><button type="button" class="a-link" onclick="optEditMode(this)">Editar opções</button></div>':''}</div></details><p class="hint">Digite uma opção e aperte Enter: ela já aparece marcada e entra na lista. Para escolher entre as que já existem, abra "Ver lista". Marque pelo menos uma.</p>`})():'')
+ +(on('stock')&&(!ep||(!hasStk(ep)&&ep.stock>0&&szOf(ep).length>1))?(()=>{const sz=ep&&parseOpts(ep.sizes).length?szOf(ep):[],v=ep?(hasStk(ep)?ep.stk:(sz.length===1?{[sz[0]]:ep.stock}:{})):{};
+  return `<div id="pstkw" style="${sz.length?'':'display:none'}"><label>${L('stock')}</label><div id="pstk">${stkHtml(sz,v)}</div>${ep&&!hasStk(ep)&&ep.stock>0?`<p class="hint err">Este produto tem ${ep.stock} peças no total, ainda sem divisão. Marque as opções e distribua nos campos acima.</p>`:''}</div>`})():'')
  +(['brand','desc','specs'].some(on)?`<details class="fold more" ${ep&&(ep.brand||ep.desc||String(ep.specs||'').trim())?'open':''}><summary>Mais detalhes (marca, descrição...)</summary><div class="foldb">`:'')
  +(on('brand')?`<label>${L('brand')}</label><input id="pm" placeholder="Ex.: Nike, Zara..." value="${esc(ep?ep.brand:'')}">`:'')
  +(on('desc')?`<label>${L('desc')}</label><textarea id="pd" rows="4" placeholder="Conte sobre o produto: modelo, caimento, cuidados...">${esc(ep?ep.desc:'')}</textarea>`:'')
@@ -710,7 +789,7 @@ function prodForm(ep){
  +`<div class="row"><button class="btn" onclick="addProd()">${ep?'Salvar alterações':'Salvar produto'}</button><button class="btn ghost" onclick="cancelEdit()">Cancelar</button></div>`;
 }
 function vConfig(){
- const c=cfgOf(),keys=Object.keys(FDEF).filter(k=>!(k==='gen'&&aarea==='importados'));
+ const c=cfgOf(),keys=Object.keys(FDEF).filter(k=>!(k==='gen'&&aarea==='importados')&&!NOIMP(k));
  return `<div class="two"><div><h3>Campos do cadastro de produto</h3><p class="hint">Painel ${AREAS[aarea].name}. Escreva um novo nome para trocar o título do campo e desmarque "Mostrar" para esconder. Deixando em branco, vale o nome original.</p>
  ${keys.map(k=>{const req=FREQ.includes(k),cur=(c.f&&c.f[k]&&c.f[k].l)||'';return `<div class="cfr"><div class="cfl"><label for="cf-${k}">${esc(fdef(k))}</label><input id="cf-${k}" value="${esc(cur)}" placeholder="${esc(fdef(k))}" maxlength="40"></div>${req?'<span class="cfreq">Obrigatório</span>':`<label class="cfs"><input type="checkbox" id="cfs-${k}" ${fc(k).on?'checked':''}>Mostrar</label>`}</div>`}).join('')}
  <div class="row"><button class="btn" onclick="saveCfg()">Salvar configurações</button><button class="btn ghost" onclick="resetCfg()">Restaurar padrão</button></div></div>
@@ -767,13 +846,13 @@ function vAdmin(){
   const a=rangeStart(vper),inR=paidOrders().filter(o=>oTs(o)>=a),tot=sumT(inR),wait=AO().filter(o=>o.status===STATUS[0]),gi=goalInfo();
   const cnt={};inR.forEach(o=>o.items.forEach(i=>{cnt[i.name]=(cnt[i.name]||0)+i.qty}));
   const top=Object.entries(cnt).sort((x,y)=>y[1]-x[1]).slice(0,6).map(([l,v])=>({l,v}));
-  body=`<div class="tabs"><button class="${vper==='14d'?'on':''}" onclick="setPer('14d')">Últimos 14 dias</button><button class="${vper==='6m'?'on':''}" onclick="setPer('6m')">Últimos 6 meses</button></div>
+  body=`<div class="tabs"><button class="${vper==='7d'?'on':''}" onclick="setPer('7d')">Últimos 7 dias</button><button class="${vper==='14d'?'on':''}" onclick="setPer('14d')">Últimos 14 dias</button><button class="${vper==='30d'?'on':''}" onclick="setPer('30d')">Últimos 30 dias</button><button class="${vper==='6m'?'on':''}" onclick="setPer('6m')">Últimos 6 meses</button></div>
   <div class="tiles">${tile('Faturamento',money(tot))}${tile('Pedidos pagos',inR.length)}${tile('Ticket médio',money(inR.length?tot/inR.length:0))}${tile('Aguardando pagamento',wait.length+' ('+money(sumT(wait))+')')}</div>
-  <h3>Vendas por ${vper==='14d'?'dia':'mês'}</h3>${tot?bars(series(vper)):'<div class="empty">Ainda não há vendas pagas neste período.</div>'}
+  <h3>Vendas por ${DAYS[vper]?'dia':'mês'}</h3>${tot?bars(series(vper)):'<div class="empty">Ainda não há vendas pagas neste período.</div>'}
   <div class="two"><div><h3>Produtos mais vendidos</h3>${hbars(top,v=>v+' un.')}</div>
   <div><h3>Meta de vendas do mês</h3><label>Meta em reais</label><div class="row" style="margin-top:0"><input id="goal" type="number" min="0" step="50" value="${goalVal()||''}" placeholder="Ex.: 5000"><button class="btn" onclick="saveGoal()">Salvar meta</button></div>
   ${gi.g?`<div class="prog"><i style="width:${Math.min(100,gi.pct)}%"></i></div><p>${money(gi.m)} de ${money(gi.g)} (${gi.pct}%). ${gi.pct>=100?'Meta batida!':'Faltam '+money(gi.g-gi.m)+'.'}</p>`:'<p class="tag">Defina uma meta para acompanhar no topo do painel.</p>'}</div></div>
-  <div class="row" style="margin-top:24px"><button class="btn sm ghost" onclick="seedSales()">Carregar vendas de exemplo</button><button class="btn sm ghost" onclick="clearSales()">Remover exemplos</button></div><p class="tag">Os exemplos servem só para ver os gráficos na prévia.</p>`;
+  ${vFinance(a,tot)}`;
  }
  if(atab==='pedidos'){
   const cnt=st=>AO().filter(o=>o.status===st).length,k=aq.trim().toLowerCase();
@@ -887,7 +966,7 @@ async function boot(){
   try{
    let ses={};try{ses=JSON.parse(localStorage.getItem(SK))||{}}catch(e){}
    const d=await FB.loadPublic();
-   S={colls:[],products:d.products,combos:d.combos,orders:[],moves:[],shares:[],customers:[],cfg:{},goals:{},seen:[],seq:1000,cart:[],cartImp:[],customer:null,...ses};
+   S={colls:[],products:d.products,combos:d.combos,orders:[],moves:[],expenses:[],shares:[],customers:[],cfg:{},goals:{},seen:[],seq:1000,cart:[],cartImp:[],customer:null,...ses};
    if(d.pub){S.colls=d.pub.colls||[];S.cfg=d.pub.cfg||{}}
    FBM=true;
    if(S.customer){S.customers=[S.customer];await loadMine()}
