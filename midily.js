@@ -112,7 +112,7 @@ window.midClose=function(){
  M.closed=true;reset();
 };
 function greet(){
- if(M.admin){M.step='admin';return say({t:'Oi, Gabriely! Eu sou a Midily, sua parceira para todos os momentos. Posso abrir os formulários para você. O que precisa fazer agora?',chips:[['Registrar despesa ou receita','adm:finance'],['Atualizar estoque','adm:stock'],['Registrar venda/pedido manual','adm:sale'],['Consultar pedidos','adm:orders']]})}
+ if(M.admin){M.step='admin';return say({t:'Oi, Gabriely! Posso registrar lançamentos, atualizar estoque, lançar uma venda ou consultar os dados por aqui. O que você precisa?',chips:[['Despesa ou receita','adm:finance'],['Atualizar estoque','adm:stock'],['Ver extrato','adm:extract'],['Registrar venda manual','adm:sale'],['Consultar pedidos','adm:orders']]})}
  const full=(typeof S!=='undefined'&&S.customer&&S.customer.name)?clip(S.customer.name,60):'',f=full.split(' ')[0];
  M.step='name0';M.c={};M.nameFails=0;
  say('Olá! Eu sou a *Midily*, assistente virtual da Bonely Store.',
@@ -269,12 +269,141 @@ async function route(txt,val){
 }
 async function adminRoute(txt,val){
  const v=val||'';
- if(v==='adm:finance'||/despes|receit|financeir|extrato/.test(norm(txt))){window.midPanelGo&&window.midPanelGo('finance');return say('Abri *Extrato*. Lá você registra uma despesa ou receita, informa valor, data e categoria. O lançamento fica salvo no painel.')}
- if(v==='adm:stock'||/estoque|repor|entrada de produto|atualizar estoque/.test(norm(txt))){window.midPanelGo&&window.midPanelGo('stock');return say('Abri *Estoque* e o formulário de movimentação. Escolha o produto e o tamanho, depois informe entrada, venda ou ajuste e a quantidade.')}
- if(v==='adm:sale'||/venda|vender|balcao|loja fisica|registrar pedido|pedido manual|criar pedido/.test(norm(txt))){window.midPanelGo&&window.midPanelGo('sale');return say('Abri *Estoque* já com “Venda fora do site” selecionado. Informe produto, tamanho, quantidade, valor e pagamento. Ao registrar, a venda vira um pedido no painel, entra no faturamento e dá baixa no estoque.')}
- if(v==='adm:orders'||/pedido|pedidos/.test(norm(txt))){window.midPanelGo&&window.midPanelGo('orders');return say('Abri a lista de *Pedidos* para você consultar e atualizar os pedidos recebidos pela loja.')}
- return say('Posso te levar direto ao formulário certo. Escolha uma opção:',{chips:[['Registrar despesa ou receita','adm:finance'],['Atualizar estoque','adm:stock'],['Registrar venda/pedido manual','adm:sale'],['Consultar pedidos','adm:orders']]});
+ if(!window.midAdmin||!window.midAdmin.ready())return say('Para fazer alterações, abra um dos painéis da loja e entre com sua conta de gestão.');
+ if(M.step.startsWith('admin_'))return adminStep(txt,v);
+ if(v==='adm:menu')return adminMenu();
+ if(v==='adm:finance'||/despes|receit|financeir/.test(norm(txt)))return adminFinance();
+ if(v==='adm:stock'||/estoque|repor|entrada de produto|atualizar estoque|moviment/.test(norm(txt)))return adminStock();
+ if(v==='adm:extract'||/extrato|saldo|balan[cç]o/.test(norm(txt)))return adminExtract();
+ if(v==='adm:sale'||/venda|vender|balcao|loja fisica|registrar pedido|pedido manual|criar pedido/.test(norm(txt)))return adminSale();
+ if(v.startsWith('adm:order:'))return adminOrderStatus(v.slice(10));
+ const oid=parseId(txt,true),st=STATUS.find(s=>norm(txt).includes(norm(s)));
+ if(oid&&st&&/status|marcar|mudar|alterar|atualizar|pedido/.test(norm(txt)))return adminConfirmOrderStatus(oid,st);
+ if(v==='adm:orders'||/pedido|pedidos/.test(norm(txt)))return adminOrders();
+ return adminMenu();
 }
+function adminMenu(){
+ M.step='admin';
+ return say('Posso fazer isso direto por aqui. O que você precisa?',{chips:[['Registrar despesa ou receita','adm:finance'],['Atualizar estoque','adm:stock'],['Ver extrato','adm:extract'],['Registrar venda manual','adm:sale'],['Consultar pedidos','adm:orders']]});
+}
+function adminFinance(){M.c.adm={action:'finance'};M.step='admin_fin_kind';return say({t:'Você quer registrar uma despesa ou uma receita?',chips:[['Despesa','adm:fin:out'],['Receita','adm:fin:in'],['Cancelar','adm:menu']]})}
+function adminStock(){
+ const P=window.midAdmin.products();if(!P.length)return say('Não encontrei produtos neste painel.');
+ M.c.adm={action:'stock',products:P};M.step='admin_stock_product';
+ return say({t:'Qual produto você quer atualizar?',chips:[...P.slice(0,9).map(p=>[p.name+' · '+p.stock+' em estoque','adm:product:'+p.id]),['Cancelar','adm:menu']]});
+}
+function adminSale(){
+ const P=window.midAdmin.products().filter(p=>+p.stock>0);if(!P.length)return say('Não encontrei produtos com estoque disponível para registrar uma venda.');
+ M.c.adm={action:'sale',products:P};M.step='admin_sale_product';
+ return say({t:'Qual produto foi vendido?',chips:[...P.slice(0,9).map(p=>[p.name+' · '+p.stock+' em estoque','adm:saleproduct:'+p.id]),['Cancelar','adm:menu']]});
+}
+function adminExtract(days){
+ if(!days){M.step='admin_extract_period';return say({t:'De qual período você quer ver o extrato?',chips:[['Últimos 7 dias','adm:extract:7'],['Últimos 30 dias','adm:extract:30'],['Últimos 90 dias','adm:extract:90'],['Voltar','adm:menu']]})}
+ const s=window.midAdmin.summary(days);M.step='admin';if(!s)return say('Não consegui consultar o extrato agora.');
+ const label=days+' dias',lines=s.recent.length?s.recent.map(r=>'• '+r.date+' · '+(r.kind==='in'?'Entrada':'Saída')+' · '+r.desc+' · '+money(r.val)).join('\n'):'Ainda não há movimentações nesse período.';
+ return say({t:'*Extrato dos últimos '+label+' — '+(aarea==='importados'?'Importados':'Moda')+'*\nEntradas: *'+money(s.receitas)+'*\nSaídas: *'+money(s.despesas)+'*\nSaldo corrido: *'+money(s.saldo)+'*\n\n*Movimentações recentes*\n'+lines,chips:[['Ver outros períodos','adm:extract'],['Registrar despesa/receita','adm:finance'],['Voltar ao menu','adm:menu']]});
+}
+function adminOrders(){
+ const L=window.midAdmin.orders();M.step='admin';
+ if(!L.length)return say({t:'Não encontrei pedidos neste painel.',chips:[['Voltar ao menu','adm:menu']]});
+ return say({t:'*Pedidos recentes — '+(aarea==='importados'?'Importados':'Moda')+'*\n'+L.slice(0,6).map(o=>'• *'+o.id+'* · '+o.customer+' · '+o.status+' · '+money(o.total)+'\n  '+o.items.join(', ')).join('\n'),chips:[...L.slice(0,5).map(o=>['Atualizar '+o.id,'adm:order:'+o.id]),['Ver extrato','adm:extract'],['Voltar ao menu','adm:menu']]});
+}
+function adminOrderStatus(id){
+ const o=window.midAdmin.orders().find(x=>x.id===id);if(!o)return say('Não encontrei esse pedido entre os mais recentes. Diga “consultar pedidos” para ver a lista atual.');
+ M.c.adm={action:'orderstatus',orderId:o.id,oldStatus:o.status};M.step='admin_order_status';
+ return say({t:'O pedido *'+o.id+'* está como *'+o.status+'*. Qual status deseja aplicar?',chips:STATUS.filter(s=>s!=='Lista de espera').map((s,i)=>[s,'adm:orderstate:'+i]).concat([['Cancelar','adm:menu']])});
+}
+function adminConfirmOrderStatus(id,status){
+ M.c.adm={action:'orderstatus',orderId:id,status};M.step='admin_confirm';M.c.adm.confirm='orderstatus';
+ return say({t:'Confirma a atualização do pedido *'+id+'* para *'+status+'*?'+(status==='Pago'?'\nIsso dá baixa no estoque.':status==='Cancelado'?'\nSe o pedido já tinha dado baixa, as peças voltarão ao estoque.':''),chips:[['Confirmar atualização','adm:yes'],['Cancelar','adm:menu']]});
+}
+function parseMoneyInput(t){
+ let s=String(t||'').replace(/[^\d,.-]/g,'');if(!s)return NaN;
+ if(s.includes(',')){s=s.replace(/\./g,'').replace(',','.')}else if((s.match(/\./g)||[]).length>1)s=s.replace(/\./g,'');
+ const v=parseFloat(s);return Number.isFinite(v)?v:NaN;
+}
+function adminStep(txt,val){
+ const a=M.c.adm||(M.c.adm={}),v=val||'',n=norm(txt);
+ if(v==='adm:menu'||v==='adm:cancel'){M.step='admin';M.c.adm={};return adminMenu()}
+ if(M.step==='admin_fin_kind'){
+  if(v==='adm:fin:in')a.kind='in';else if(v==='adm:fin:out')a.kind='out';else return adminFinance();
+  M.step='admin_fin_desc';return say(a.kind==='in'?'O que foi essa receita? Escreva uma descrição curta.':'O que foi essa despesa? Escreva uma descrição curta.');
+ }
+ if(M.step==='admin_fin_desc'){
+  if(txt.trim().length<2)return say('Escreva uma descrição curta para o lançamento.');
+  a.desc=clip(txt,100);M.step='admin_fin_value';return say('Qual foi o valor? Pode digitar, por exemplo, 89,90.');
+ }
+ if(M.step==='admin_fin_value'){
+  a.val=parseMoneyInput(txt);if(!(a.val>0))return say('Não consegui identificar um valor válido. Digite, por exemplo, 89,90.');
+  const cats=window.midAdmin.expenses(a.kind);M.step='admin_fin_cat';
+  return say({t:'Escolha a categoria:',chips:cats.map((c,i)=>[c,'adm:fincat:'+i]).concat([['Cancelar','adm:menu']])});
+ }
+ if(M.step==='admin_fin_cat'){
+  const cats=window.midAdmin.expenses(a.kind),i=v.startsWith('adm:fincat:')?+(v.split(':').pop()):cats.findIndex(c=>norm(c)===n);a.cat=cats[i];
+  if(!a.cat)return say('Escolha uma das categorias para continuar.',{chips:cats.map((c,j)=>[c,'adm:fincat:'+j])});
+  M.step='admin_confirm';a.confirm='finance';
+  return say({t:'Confirma este lançamento?\n*'+(a.kind==='in'?'Receita':'Despesa')+'*: '+a.desc+'\n*Valor*: '+money(a.val)+'\n*Categoria*: '+a.cat,chips:[['Confirmar lançamento','adm:yes'],['Cancelar','adm:menu']]});
+ }
+ if(M.step==='admin_stock_product'||M.step==='admin_sale_product'){
+  const sale=M.step==='admin_sale_product',id=(v.split(':').pop()),p=a.products.find(x=>String(x.id)===id)||a.products.find(x=>norm(x.name)===n);
+  if(!p)return sale?adminSale():adminStock();
+  a.productId=p.id;a.product=p;
+  const next=sale?'admin_sale':'admin_stock';
+  if(p.sizes.length>1){M.step=next+'_size';return say({t:'Qual '+(aarea==='importados'?'opção':'tamanho')+'?',chips:p.levels.slice(0,10).map((x,i)=>[x.size+' · '+x.stock+' em estoque','adm:size:'+i]).concat([['Cancelar','adm:menu']])})}
+  a.size=p.sizes[0]||'Único';return sale?askSaleQty():askStockType();
+ }
+ if(M.step==='admin_stock_size'||M.step==='admin_sale_size'){
+  const sale=M.step==='admin_sale_size',i=+(v.split(':').pop()),sz=a.product&&a.product.sizes[i];if(!sz)return say('Escolha uma das opções disponíveis.');a.size=sz;return sale?askSaleQty():askStockType();
+ }
+ if(M.step==='admin_stock_type'){
+  if(v==='adm:stock:in'||/^entrada|reposi/.test(n))a.type='entrada';else if(v==='adm:stock:out'||/^saida|ajuste|perda/.test(n))a.type='saida';else return askStockType();
+  M.step='admin_stock_qty';return say('Quantas unidades?');
+ }
+ if(M.step==='admin_stock_qty'){
+  const q=parseInt(txt,10);if(!(q>0))return say('Digite a quantidade como um número inteiro maior que zero.');a.qty=q;
+  const level=a.product.levels.find(x=>x.size.toLowerCase()===String(a.size).toLowerCase());
+  if(a.type==='saida'&&q>(level?level.stock:a.product.stock||0))return say('Essa quantidade passa do estoque de '+a.size+'. Digite uma quantidade menor ou escolha Entrada.');
+  M.step='admin_confirm';a.confirm='stock';
+  return say({t:'Confirma a movimentação?\n*Produto*: '+a.product.name+'\n*Opção*: '+a.size+'\n*Movimento*: '+(a.type==='entrada'?'Entrada':'Saída')+'\n*Quantidade*: '+a.qty,chips:[['Confirmar movimentação','adm:yes'],['Cancelar','adm:menu']]});
+ }
+ if(M.step==='admin_sale_qty'){
+  const q=parseInt(txt,10);if(!(q>0))return say('Digite a quantidade como um número inteiro maior que zero.');a.qty=q;
+  const level=a.product.levels.find(x=>x.size.toLowerCase()===String(a.size).toLowerCase());
+  if(q>(level?level.stock:a.product.stock||0))return say('Essa quantidade passa do estoque de '+a.size+'. Digite uma quantidade menor.');
+  M.step='admin_sale_price';return say('Qual foi o valor de cada unidade?');
+ }
+ if(M.step==='admin_sale_price'){
+  a.price=parseMoneyInput(txt);if(!(a.price>=0))return say('Não consegui identificar um preço válido.');
+  M.step='admin_sale_pay';return say({t:'Como foi o pagamento?',chips:[['Pix','adm:pay:Pix'],['Dinheiro','adm:pay:Dinheiro'],['Cartão de crédito','adm:pay:Cartão de crédito'],['Cartão de débito','adm:pay:Cartão de débito'],['Outro','adm:pay:A combinar']]});
+ }
+ if(M.step==='admin_sale_pay'){
+  a.pay=v.startsWith('adm:pay:')?v.slice(8):'';if(!a.pay)return say('Escolha uma forma de pagamento.');
+  M.step='admin_sale_customer';return say('Qual o nome do cliente? Se preferir não informar, toque em pular.',{chips:[['Pular','adm:sale:skipname']]});
+ }
+ if(M.step==='admin_sale_customer'){
+  a.customer=v==='adm:sale:skipname'?'':clip(txt,80);M.step='admin_confirm';a.confirm='sale';
+  return say({t:'Confirma o registro desta venda?\n*Produto*: '+a.product.name+' · '+a.size+'\n*Quantidade*: '+a.qty+' × '+money(a.price)+'\n*Total*: '+money(a.qty*a.price)+'\n*Pagamento*: '+a.pay+'\n*Cliente*: '+(a.customer||'Venda na loja')+'\n\nA venda será marcada como Entregue e dará baixa no estoque.',chips:[['Confirmar venda','adm:yes'],['Cancelar','adm:menu']]});
+ }
+ if(M.step==='admin_extract_period'){
+  const days=+(v.split(':').pop());if(![7,30,90].includes(days))return adminExtract();return adminExtract(days);
+ }
+ if(M.step==='admin_order_status'){
+  const i=v.startsWith('adm:orderstate:')?+v.split(':').pop():STATUS.findIndex(s=>norm(s)===n),status=STATUS[i];
+  if(!status||status==='Lista de espera')return say('Escolha um dos status disponíveis.',{chips:STATUS.filter(s=>s!=='Lista de espera').map((s,j)=>[s,'adm:orderstate:'+j])});
+  return adminConfirmOrderStatus(a.orderId,status);
+ }
+ if(M.step==='admin_confirm'){
+  if(v!=='adm:yes')return say('Ação cancelada. Nenhuma alteração foi feita.',{chips:[['Voltar ao menu','adm:menu']]});
+  const type=a.confirm;M.step='admin';
+  if(type==='finance'){const r=window.midAdmin.addExpense(a);M.c.adm={};return r.ok?say({t:(a.kind==='in'?'Receita':'Despesa')+' registrada com sucesso.\n*'+a.desc+'* · '+money(a.val)+' · '+a.cat,chips:[['Ver extrato','adm:extract'],['Voltar ao menu','adm:menu']]}):say(r.error)}
+  if(type==='stock'){const r=window.midAdmin.addStock(a);M.c.adm={};return r.ok?say({t:'Movimentação registrada.\n*'+r.product+'* · '+r.size+' · '+(r.type==='entrada'?'+':'−')+r.qty+' unidade(s). Estoque agora: '+r.stock,chips:[['Atualizar mais estoque','adm:stock'],['Voltar ao menu','adm:menu']]}):say(r.error)}
+  if(type==='sale'){const r=await window.midAdmin.addSale(a);M.c.adm={};return r.ok?say({t:'Venda registrada como *'+r.id+'*.\n'+r.qty+' × '+r.product+' ('+r.size+') · *'+money(r.total)+'*. O estoque foi atualizado.',chips:[['Registrar outra venda','adm:sale'],['Ver extrato','adm:extract'],['Voltar ao menu','adm:menu']]}):say(r.error)}
+  if(type==='orderstatus'){const r=window.midAdmin.updateOrder(a.orderId,a.status);M.c.adm={};return r.ok?say({t:'Pedido *'+r.id+'* atualizado para *'+r.status+'*. O estoque e o histórico foram ajustados conforme necessário.',chips:[['Consultar pedidos','adm:orders'],['Voltar ao menu','adm:menu']]}):say(r.error)}
+ }
+ return adminMenu();
+}
+function askStockType(){M.step='admin_stock_type';return say({t:'Você quer registrar uma entrada ou uma saída?',chips:[['Entrada / reposição','adm:stock:in'],['Saída / ajuste','adm:stock:out'],['Cancelar','adm:menu']]})}
+function askSaleQty(){M.step='admin_sale_qty';return say('Quantas unidades desse produto foram vendidas?')}
 const clip=(s,n)=>String(s).replace(/\s+/g,' ').trim().slice(0,n||500);
 
 async function free(t){

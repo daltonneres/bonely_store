@@ -735,6 +735,66 @@ function ledger(){
  let bal=0;rows.forEach(r=>{bal+=r.kind==='in'?r.val:-r.val;r.bal=bal});
  return rows.reverse();
 }
+/* Operações da Midily: mesmas regras de negócio do painel, com confirmação no chat. */
+window.midAdmin={
+ ready:()=>view==='admin'&&adminOk&&!!aarea,
+ products:()=>S.products.filter(p=>isImpP(p)===(aarea==='importados')).map(p=>({id:p.id,name:p.name,stock:p.stock,sizes:szOf(p),levels:szOf(p).map(size=>({size,stock:stkQ(p,size)})),price:p.price})),
+ expenses:kind=>kind==='in'?REC_CATS.slice():EXP_CATS.slice(),
+ addExpense({kind,desc,val,cat}){
+  if(!this.ready())return{ok:false,error:'O painel não está disponível.'};
+  kind=kind==='in'?'in':'out';desc=String(desc||'').trim();val=+val;
+  const cats=kind==='in'?REC_CATS:EXP_CATS;
+  if(!desc)return{ok:false,error:'Informe uma descrição.'};
+  if(!(val>0&&Number.isFinite(val)))return{ok:false,error:'O valor precisa ser maior que zero.'};
+  if(!cats.includes(cat))return{ok:false,error:'Escolha uma categoria válida.'};
+  const ts=Date.now();S.expenses=S.expenses||[];
+  const row={id:'x'+ts.toString(36)+Math.random().toString(36).slice(2,6),ts,date:fmtD(ts),desc,cat,val:+val.toFixed(2),kind,area:aarea};
+  S.expenses.unshift(row);save();render();toast(kind==='in'?'Receita registrada.':'Despesa registrada.');return{ok:true,row};
+ },
+ addStock({productId,size,qty,type,note}){
+  if(!this.ready())return{ok:false,error:'O painel não está disponível.'};
+  const p=S.products.find(x=>String(x.id)===String(productId)),q=Math.floor(+qty),z=size||szOf(p||{})[0]||'Único';
+  if(!p||isImpP(p)!==(aarea==='importados'))return{ok:false,error:'Não encontrei esse produto neste painel.'};
+  if(!(q>0))return{ok:false,error:'A quantidade precisa ser um número inteiro maior que zero.'};
+  if(!['entrada','saida'].includes(type))return{ok:false,error:'Tipo de movimentação inválido.'};
+  if(!ensureStk(p))return{ok:false,error:'Este produto precisa ter o estoque dividido por tamanho antes de movimentar.'};
+  if(!szOf(p).some(x=>x.toLowerCase()===String(z).toLowerCase()))return{ok:false,error:'Esse tamanho/opção não existe para o produto.'};
+  const cur=stkQ(p,z);if(type==='saida'&&q>cur)return{ok:false,error:'Só há '+cur+' unidade(s) de '+z+' no estoque.'};
+  const ts=Date.now(),when=new Date(ts).toLocaleString('pt-BR');p.stk[z]=(+p.stk[z]||0)+(type==='entrada'?q:-q);stkSum(p);
+  S.moves.unshift({date:when,ts,name:p.name,size:z,type,qty:q,note:String(note||'').trim(),area:aarea});save();render();toast(type==='entrada'?'Entrada registrada.':'Saída registrada.');return{ok:true,product:p.name,size:z,qty:q,type,stock:stkQ(p,z)};
+ },
+ async addSale({productId,size,qty,price,pay,customer,note}){
+  if(!this.ready())return{ok:false,error:'O painel não está disponível.'};
+  const p=S.products.find(x=>String(x.id)===String(productId)),q=Math.floor(+qty),v=+price,z=size||szOf(p||{})[0]||'Único';
+  if(!p||isImpP(p)!==(aarea==='importados'))return{ok:false,error:'Não encontrei esse produto neste painel.'};
+  if(!(q>0&&Number.isFinite(q)))return{ok:false,error:'A quantidade precisa ser um número inteiro maior que zero.'};
+  if(!(v>=0&&Number.isFinite(v)))return{ok:false,error:'Informe um preço válido.'};
+  if(!ensureStk(p))return{ok:false,error:'Este produto precisa ter o estoque dividido por tamanho antes de registrar a venda.'};
+  if(!szOf(p).some(x=>x.toLowerCase()===String(z).toLowerCase()))return{ok:false,error:'Esse tamanho/opção não existe para o produto.'};
+  if(q>stkQ(p,z))return{ok:false,error:'Só há '+stkQ(p,z)+' unidade(s) de '+z+' no estoque.'};
+  if(addMove.b)return{ok:false,error:'Já estou registrando outra venda. Tente novamente.'};
+  addMove.b=1;
+  try{
+   const seq=FBM?await FB.nextSeq().catch(()=>null):++S.seq;if(!seq)return{ok:false,error:'Não foi possível gerar o número do pedido.'};
+   const id='BN'+seq,ts=Date.now(),when=new Date(ts).toLocaleString('pt-BR'),sub=+(v*q).toFixed(2),area=aarea;
+   S.orders.unshift({id,date:when,ts,customer:{name:String(customer||'').trim()||'Venda na loja',email:'',phone:'',addr:'Venda na loja',cep:''},items:[{key:p.id,name:p.name,price:v,qty:q,size:z}],subtotal:sub,ship:{name:'Venda na loja',price:0,local:true},total:sub,pay:pay||'Dinheiro',status:'Entregue',tracking:'',stockDone:true,store:true,area});
+   S.seen=[...(S.seen||[]),id];takeStk(p,q,z);S.moves.unshift({date:when,ts,name:p.name,size:z,type:'saida',qty:q,note:'Venda na loja '+id+(note?' · '+String(note).trim():''),area});save();render();toast('Venda '+id+' registrada como Entregue.');return{ok:true,id,total:sub,product:p.name,size:z,qty:q};
+  }finally{addMove.b=0}
+ },
+ summary(days=30){
+  if(!this.ready())return null;
+  const from=Date.now()-days*864e5,rows=ledger().filter(r=>r.ts>=from),ins=rows.filter(r=>r.kind==='in'),outs=rows.filter(r=>r.kind==='out');
+  return{days,receitas:ins.reduce((a,x)=>a+x.val,0),despesas:outs.reduce((a,x)=>a+x.val,0),saldo:rows.length?rows[0].bal:0,recent:rows.slice(0,6).map(r=>({kind:r.kind,desc:r.desc,cat:r.cat||'',val:r.val,date:fmtD(r.ts)}))};
+ },
+ orders:()=>AO().slice(0,8).map(o=>({id:o.id,status:o.status,customer:o.customer?.name||'Cliente',total:o.total,date:o.date,items:(o.items||[]).map(i=>i.qty+'x '+i.name+(i.size?' ('+i.size+')':''))})),
+ updateOrder(id,status){
+  if(!this.ready())return{ok:false,error:'O painel não está disponível.'};
+  const o=AO().find(x=>String(x.id).toUpperCase()===String(id).toUpperCase());
+  if(!o)return{ok:false,error:'Não encontrei esse pedido neste painel.'};
+  if(!STATUS.includes(status))return{ok:false,error:'Esse status não é válido.'};
+  setStatus(o.id,status);save();render();toast('Pedido '+o.id+' atualizado.');return{ok:true,id:o.id,status:o.status};
+ }
+};
 function vFinance(a,tot){
  const ex=AX().filter(x=>(x.ts||0)>=a),totX=sumX(ex),extra=sumX(AI().filter(x=>(x.ts||0)>=a)),led=ledger(),bal=led.length?led[0].bal:0;
  tot+=extra;
