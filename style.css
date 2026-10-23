@@ -984,3 +984,9 @@ body.is-panel .popon .ic{width:16px;height:16px;color:#8fb08a}
  .mm{max-width:92%}
 }
 @media (prefers-reduced-motion:reduce){.mid{animation:none}.dots i{animation:none;opacity:.6}}
+
+
+/* frases rotativas do hero */
+.herorot{min-height:2.9em;display:flex;align-items:center;justify-content:center;transition:opacity .45s ease,transform .45s ease}
+.herorot.out{opacity:0;transform:translateY(-8px)}
+@media (prefers-reduced-motion:reduce){.herorot{transition:none}}

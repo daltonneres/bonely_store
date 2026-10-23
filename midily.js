@@ -15,7 +15,7 @@ const dt=(ts,d)=>ts?new Date(ts).toLocaleDateString('pt-BR'):(d||'');
 
 /* ---------- base de conhecimento (alinhada às páginas de Privacidade e Cancelamento) ---------- */
 const SUBJ={order:'Consulta de pedido',cancel:'Cancelamento de pedido',arrep:'Desistência (direito de arrependimento)',defeito:'Troca por defeito',tamanho:'Troca por tamanho',reemb:'Reembolso',compra:'Ajuda na compra (auxiliar de compra)',outro:'Outro assunto'};
-const MENU=[['Auxiliar de compra','shop'],['Consultar meu pedido','order'],['Cancelar ou trocar','cx'],['Tirar uma dúvida','faq'],['Falar com a '+OWNER,'human']];
+const MENU=[['Auxiliar de compra','shop'],['Simular frete','frete'],['Consultar meu pedido','order'],['Cancelar ou trocar','cx'],['Tirar uma dúvida','faq'],['Falar com a '+OWNER,'human']];
 const FAQ=[
  {id:'frete',lbl:'Frete e entrega',k:/frete|prazo|entreg|envio|enviam|chega|correios|retirad|retirar|cep/,
   a:()=>IMP
@@ -79,7 +79,7 @@ function paint(){
  b.innerHTML=M.msgs.map((m,i)=>msgHtml(m,i===n)).join('')+(M.typing?'<div class="mm m"><span class="dots" aria-label="Midily está escrevendo"><i></i><i></i><i></i></span></div>':'');
  b.scrollTop=b.scrollHeight;
 }
-const PH={name0:'Digite o seu nome',name:'Digite o seu nome',shop_bud:'Digite um valor, ex.: 300',shop_qty:'Ex.: 2'};
+const PH={name0:'Digite o seu nome',name:'Digite o seu nome',shop_bud:'Digite um valor, ex.: 300',frete_cep:'Digite o CEP, ex.: 85000-000',shop_qty:'Ex.: 2'};
 async function say(...parts){
  if(M.closed)return;
  const g=M.gen;M.busy=true;
@@ -181,7 +181,7 @@ async function route(txt,val){
   if(val)return await act(val);
   const n=norm(txt);
   if(M.step!=='name0'&&/^(menu|inicio|comecar|recomecar|reiniciar|voltar)\b/.test(n))return await act('menu');
-  if(/^shop_/.test(M.step)){const k=intent(txt);if(k==='human'||k==='cx'||k==='order')return await free(txt)}
+  if(/^(shop_|frete_)/.test(M.step)){const k=intent(txt);if(k==='human'||k==='cx'||k==='order')return await free(txt)}
   switch(M.step){
    case 'name0':{
     const nm=parseName(txt);
@@ -190,6 +190,11 @@ async function route(txt,val){
      return await say({t:'Antes de continuar, como posso te chamar? Pode ser só o primeiro nome.',chips:M.nameFails>=2?[['Continuar sem informar','name:']]:undefined});
     }
     return await setName(nm);
+   }
+   case 'frete_cep':{
+    const c=cepOf(txt);
+    if(!c)return await say('Não consegui identificar o CEP. Digite os 8 números, por exemplo 85000-000.');
+    return await doFrete(c);
    }
    case 'shop_bud':{
     const b=parseBudget(txt);
@@ -241,6 +246,7 @@ async function free(t){
  if(k==='human'){seed();return act('human')}
  if(k==='cx'){seed();const s=subOf(t);return s?act('cx:'+s):act('cx')}
  if(k==='order'){seed();const id=parseId(t);if(id){M.c.sub='order';M.c.id=id;return afterId()}return act('order')}
+ if((/frete|\bcep\b|prazo de entrega|quanto (custa|fica) (pra|para) (enviar|mandar|entregar)/.test(norm(t)))&&(cepOf(t)||/simul|calcul|quanto|valor|custa|fica/.test(norm(t)))){if(IMP)return act('frete');M.c.frCep=cepOf(t);return act('frete')}
  if(k==='shop'){M.c.shopPre=parseBudget(t);return act('shop')}
  const f=faqOf(t);if(f)return answerFaq(f);
  const p=prodAnswer(t);if(p){return say({...p,chips:[['Outra dúvida','faq'],['Falar com a '+OWNER,'human'],['Era só isso','bye']]})}
@@ -257,6 +263,7 @@ async function act(v){
  }
  if(v.startsWith('name:'))return setName(v.slice(5).trim());
  if(v==='shop')return shopStart();
+ if(v==='frete')return freteStart();
  if(v.startsWith('bud:')){M.c.shop=M.c.shop||{};M.c.shop.bud=+v.slice(4);return (M.c.shop.keep&&M.c.shop.n)?shopResults():shopFor()}
  if(v.startsWith('for:')){M.c.shop=M.c.shop||{};M.c.shop.gen=v.slice(4);return shopQty()}
  if(v.startsWith('qty:')){M.c.shop=M.c.shop||{};const q=v.slice(4);M.c.shop.n=q==='max'?'max':+q;return shopResults()}
@@ -286,7 +293,7 @@ async function act(v){
 function answerFaq(f){
  if(!f)return say({t:'Posso ajudar com outro tema?',chips:MENU});
  M.step='menu';
- return say({t:f.a(),links:f.links?f.links():undefined,chips:[['Outra dúvida','faq'],['Consultar pedido','order'],['Falar com a '+OWNER,'human'],['Era só isso','bye']]});
+ return say({t:f.a(),links:f.links?f.links():undefined,chips:[...(f.id==='frete'&&!IMP?[['Simular frete','frete']]:[]),['Outra dúvida','faq'],['Consultar pedido','order'],['Falar com a '+OWNER,'human'],['Era só isso','bye']]});
 }
 
 /* ---------- nome do cliente ---------- */
@@ -440,9 +447,10 @@ async function shopResults(){
  opts.forEach((o,i)=>parts.push({t:'*Opção '+(i+1)+': '+o.title+'*\n'+o.set.map(pLine).join('\n')+'\n*Total: '+money(tot(o.set))+'*\n'+o.note,links:o.set.map(p=>['Ver '+p.name,prodPath(p)])}));
  const cb=n>=2?comboOpt(sh,bud):null;
  if(cb)parts.push({t:'*Combo da loja que cabe no orçamento: '+cb.c.name+'*\n'+cb.its.map(p=>'• '+p.name).join('\n')+'\nDe '+money(cb.sum)+' por *'+money(cb.pr)+'*, uma economia de *'+money(cb.sav)+'*.',links:cb.its.map(p=>['Ver '+p.name,prodPath(p)])});
+ M.c.frQty=n;
  sh.res=opts.map((o,i)=>'Opção '+(i+1)+': '+o.set.map(p=>p.name+' '+money(p.price)).join(' + ')+' (total '+money(tot(o.set))+')').join('; ')+(cb?'; Combo '+cb.c.name+' '+money(cb.pr):'');
  parts.push({t:'Os valores não incluem '+(IMP?'a entrega, combinada na hora':'o frete, calculado pelo CEP no carrinho')+'. O pagamento pode ser no Pix ou no cartão em até 12x. Quer que eu passe essa seleção para a '+OWNER+' te ajudar a fechar?',
-  chips:[['Falar com a '+OWNER+' sobre essa compra','shopgo'],['Mudar orçamento','shopbud'],['Nova busca','shopagain'],['Voltar ao início','menu']]});
+  chips:[['Falar com a '+OWNER+' sobre essa compra','shopgo'],...(IMP?[]:[['Simular o frete','frete']]),['Mudar orçamento','shopbud'],['Nova busca','shopagain'],['Voltar ao início','menu']]});
  return say(...parts);
 }
 function shopGo(){
@@ -453,6 +461,43 @@ function shopGo(){
  c.todo='Ajudar a escolher tamanhos e finalizar a compra com as opções sugeridas.';
  c.order=null;
  return intake();
+}
+
+/* ---------- simulador de frete (usa o mesmo /api/frete do carrinho) ---------- */
+const cepOf=t=>{const d=String(t).replace(/\D/g,'');return d.length===8?d:''};
+function freteQty(){
+ try{if(typeof CART==='function'){const q=CART().reduce((a,i)=>a+i.qty,0);if(q)return q}}catch(e){}
+ return M.c.frQty||1;
+}
+async function freteStart(){
+ if(IMP)return say({t:'Nos importados a entrega é na região ('+CIDADES.join(', ')+') ou você retira na loja, sem custo de frete. O valor da entrega é combinado na hora. Para outra cidade, a '+OWNER+' confirma pelo WhatsApp.',
+  chips:[['Falar com a '+OWNER,'human'],['Voltar ao início','menu']]});
+ const pre=M.c.frCep;M.c.frCep='';
+ if(pre)return doFrete(pre);
+ M.step='frete_cep';
+ return say({t:'Vou simular o frete para você. Qual é o CEP de entrega?',chips:[['Voltar ao início','menu']]});
+}
+async function doFrete(cep){
+ M.step='menu';
+ const q=freteQty();
+ await say('Um instante, vou consultar o frete para o CEP *'+cep.slice(0,5)+'-'+cep.slice(5)+'*…');
+ let opts=null,demo=false,fail=false;
+ try{
+  const r=await fetch('/api/frete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cep,items:[{qty:q}],value:(typeof CART==='function'&&CART().length&&typeof cartSub==='function')?cartSub():0})});
+  if(r.status===404||r.status===405)demo=true;
+  else if(!r.ok)fail=true;
+  else{const d=await r.json();if(d.opts&&d.opts.length)opts=d.opts;else fail=true}
+ }catch(e){demo=true}
+ if(demo&&typeof freteDemo==='function'){opts=freteDemo(cep);}
+ else if(demo)fail=true;
+ if(fail||!opts)return say({t:'Não consegui calcular o frete agora. Você pode tentar de novo ou pedir para a '+OWNER+' calcular pelo WhatsApp.',chips:[['Tentar outro CEP','frete'],['Falar com a '+OWNER,'human'],['Voltar ao início','menu']]});
+ const isDemo=demo||opts.some(o=>o.demo);
+ const L=opts.map(o=>'• *'+o.name+'*: '+(+o.price>0?money(o.price):'grátis')+(o.days?' · prazo de '+o.days+(o.days===1?' dia útil':' dias úteis'):''));
+ const best=opts.slice().sort((a,b)=>a.price-b.price)[0],fast=opts.slice().sort((a,b)=>(a.days||99)-(b.days||99))[0];
+ const tip=opts.length>1?(best===fast?'A opção *'+best.name+'* é a mais barata e a mais rápida.':'A mais barata é *'+best.name+'* e a mais rápida é *'+fast.name+'*.'):'';
+ return say({t:'Frete para o CEP '+cep.slice(0,5)+'-'+cep.slice(5)+', considerando '+q+' '+(q===1?'peça':'peças')+':\n'+L.join('\n')+(tip?'\n'+tip:'')},
+  {t:(isDemo?'Atenção: estes valores são *estimativas de exemplo*. O valor real aparece no carrinho, ao informar o CEP. ':'O valor final aparece no carrinho, ao informar o CEP, e pode mudar conforme a quantidade de peças. ')+'Deseja mais alguma coisa?',
+   chips:[['Simular outro CEP','frete'],['Auxiliar de compra','shop'],['Falar com a '+OWNER,'human'],['Voltar ao início','menu']]});
 }
 
 /* ---------- cancelamentos e trocas ---------- */

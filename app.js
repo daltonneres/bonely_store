@@ -565,7 +565,7 @@ function kindBar(){const pool=S.products.filter(p=>match(p,1)),ks=[...new Set(po
  return `<div class="pills impf"><button class="${!kindF?'on':''}" onclick="kindF='';render()">Todos</button>${ks.map((k,i)=>`<button class="${kindF===k?'on':''}" onclick="kindF=KS[${i}];render()">${esc(k)}</button>`).join('')}${sem?`<button class="${kindF==='__none'?'on':''}" onclick="kindF='__none';render()">Outros</button>`:''}</div>`}
 function vLoja(){
  const list=S.products.filter(p=>match(p));
- return `${SEC==='importados'?`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><h1 class="imp">IMPORTADOS</h1><p>Produtos importados selecionados pela Bonely Store, com entrega na região ou retirada.</p></div></section>`:`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><img class="herologo" src="${LOGO}" alt="Bonely Store"><p>Moda feminina, masculina e peças especiais, com envio para todo o Brasil.</p></div></section>`}
+ return `${SEC==='importados'?`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><h1 class="imp">IMPORTADOS</h1><p>Produtos importados selecionados pela Bonely Store, com entrega na região ou retirada.</p></div></section>`:`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><img class="herologo" src="${LOGO}" alt="Bonely Store"><p class="herorot" id="herorot" aria-live="off">Moda feminina, masculina e peças especiais, com envio para todo o Brasil.</p></div></section>`}
  ${SEC==='importados'?vCatsImp():vCats()}
  <div class="benefits"><div class="wrap">${BEN.map(b=>`<div class="ben">${IC[b[0]]}<span><b>${b[1]}</b>${b[2]}</span></div>`).join('')}</div></div>
  <section id="cat"><div class="wrap"><h2>${SEC==='importados'?'Importados':'Catálogo'}</h2><p class="sub">${q?`Resultados para “${esc(q)}” <button class="btn sm ghost" onclick="q='';render()">Limpar busca</button>`:(SEC==='importados'?'Produtos importados selecionados.':'Moda feminina e masculina.')}</p>
@@ -1220,3 +1220,32 @@ async function boot(){
  if(pg){setTimeout(()=>{const e=document.getElementById(pg);if(e)e.scrollIntoView();pg=''},60)}
 }
 boot();
+
+
+/* Frases que se revezam no topo da loja (home de moda). Procura o elemento a cada troca,
+   então continua funcionando quando o render() refaz a tela. */
+(function(){
+ const F=[
+  'Moda feminina, masculina e peças especiais, com envio para todo o Brasil.',
+  'Peças que combinam com o seu estilo.',
+  'Novidades chegando toda semana.',
+  'Leve junto, pague menos nos combos.',
+  'Importados selecionados com entrega na região.',
+  'Seu próximo look está aqui.'
+ ];
+ let i=0;
+ const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion:reduce)').matches;
+ setInterval(()=>{
+  const el=document.getElementById('herorot');
+  if(!el||document.hidden)return;
+  i=(i+1)%F.length;
+  if(reduce){el.textContent=F[i];return}
+  el.classList.add('out');
+  setTimeout(()=>{
+   const e=document.getElementById('herorot');
+   if(!e)return;
+   e.textContent=F[i];
+   e.classList.remove('out');
+  },450);
+ },4500);
+})();
