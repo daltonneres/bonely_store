@@ -658,7 +658,7 @@ function vAreaModal(){
  return `<div class="modal" ${aarea?`onclick="if(event.target===this){apick=false;render()}"`:''}><div class="apd" role="dialog" aria-modal="true" aria-labelledby="apt"><div class="aph"><span class="spark">✦ ✧ ✦</span><h2 id="apt">${aarea?'Trocar de painel':'Olá, '+OWNER}</h2><p class="sub">${aarea?'Escolha qual painel você quer ver.':'Qual painel você quer abrir?'}</p></div><div class="apg">${card('moda')}${card('importados')}</div><div class="apf">${aarea?'<button class="btn sm ghost" onclick="apick=false;render()">Cancelar</button>':'<button class="btn sm ghost" onclick="go(\'loja\')">Voltar para a loja</button>'}</div></div></div>`;
 }
 const PAID=['Pago','Separando','Enviado','Entregue'],MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-const ATABS0=[['produtos','Produtos'],['estoque','Estoque'],['vendas','Vendas'],['pedidos','Pedidos'],['combos','Combos'],['cupons','Cupons'],['compartilhados','Compartilhados'],['config','Configurações']];
+const ATABS0=[['produtos','Produtos'],['estoque','Estoque'],['vendas','Vendas'],['extrato','Extrato'],['pedidos','Pedidos'],['combos','Combos'],['cupons','Cupons'],['compartilhados','Compartilhados'],['config','Configurações']];
 const ATABS=()=>ATABS0.filter(([k])=>!(k==='combos'&&aarea==='importados'));
 const aMatch=p=>!aq||p.name.toLowerCase().includes(aq.trim().toLowerCase());
 function oTs(o){if(o.ts)return o.ts;const m=String(o.date).match(/(\d+)\/(\d+)\/(\d+)/);return m?new Date(+m[3],+m[2]-1,+m[1]).getTime():Date.now()}
@@ -1088,7 +1088,11 @@ function vAdmin(){
   <h3>Vendas por ${DAYS[vper]?'dia':'mês'}</h3>${tot?bars(series(vper)):'<div class="empty">Ainda não há vendas pagas neste período.</div>'}
   <div class="two"><div><h3>Produtos mais vendidos</h3>${hbars(top,v=>v+' un.')}</div>
   <div><h3>Meta de vendas do mês</h3><label>Meta em reais</label><div class="row" style="margin-top:0"><input id="goal" type="number" min="0" step="50" value="${goalVal()||''}" placeholder="Ex.: 5000"><button class="btn" onclick="saveGoal()">Salvar meta</button></div>
-  ${gi.g?`<div class="prog"><i style="width:${Math.min(100,gi.pct)}%"></i></div><p>${money(gi.m)} de ${money(gi.g)} (${gi.pct}%). ${gi.pct>=100?'Meta batida!':'Faltam '+money(gi.g-gi.m)+'.'}</p>`:'<p class="tag">Defina uma meta para acompanhar no topo do painel.</p>'}</div></div>
+  ${gi.g?`<div class="prog"><i style="width:${Math.min(100,gi.pct)}%"></i></div><p>${money(gi.m)} de ${money(gi.g)} (${gi.pct}%). ${gi.pct>=100?'Meta batida!':'Faltam '+money(gi.g-gi.m)+'.'}</p>`:'<p class="tag">Defina uma meta para acompanhar no topo do painel.</p>'}</div></div>`;
+ }
+ if(atab==='extrato'){
+  const a=rangeStart(vper),tot=sumT(paidOrders().filter(o=>oTs(o)>=a));
+  body=`<div class="tabs"><button class="${vper==='7d'?'on':''}" onclick="setPer('7d')">Últimos 7 dias</button><button class="${vper==='14d'?'on':''}" onclick="setPer('14d')">Últimos 14 dias</button><button class="${vper==='30d'?'on':''}" onclick="setPer('30d')">Últimos 30 dias</button><button class="${vper==='6m'?'on':''}" onclick="setPer('6m')">Últimos 6 meses</button></div>
   ${vFinance(a,tot)}`;
  }
  if(atab==='pedidos'){
