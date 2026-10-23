@@ -26,6 +26,7 @@ const demo=()=>({
 let S; try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
 if(!S)S=demo();
 if(!S.expenses)S.expenses=[];
+if(!S.coupons)S.coupons=[];
 function CART(){return S[CK]||(S[CK]=[])}
 /* migra importados que ficaram no carrinho antigo (misturado) para o carrinho próprio */
 try{if(!S.cartImp)S.cartImp=[];const mv=(S.cart||[]).filter(i=>{const p=S.products.find(x=>x.id==i.key);return p&&p.type==='avulso'});if(mv.length){S.cartImp.push(...mv);S.cart=S.cart.filter(i=>!mv.includes(i));localStorage.setItem(K,JSON.stringify(S))}}catch(e){}
@@ -40,6 +41,85 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='',pid=null,shareId=null,asp=null,asn='',asw='',aq='',ofil='Todos',vper='14d',cbSel=[],cbName='',cbPrice='',newQ=[],cdraft={},kindF='',aarea=null,apick=false,aedit=null,justOrdered=null,trkPre=null;
 
 /* Camada de dados: com firebase.js carregado, a loja lê do Firestore e o painel grava nele (save() -> FB.queue). Sem ele, cai no localStorage (prévia). */
+
+
+/* ---------- Cupons ---------- */
+let cupF='todos',cup=null,cupMsg='',cupErr=0,cupTmp='',popOn=false,cupE='',cupSel='',cupN='',cupW='';
+const CPK='bonely_cup_'+(IMP?'i':'m');
+const cupNorm=c=>String(c||'').toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
+const cupDesc=c=>(c.type==='fixed'?money(c.value):String(c.value).replace('.',',')+'%')+' de desconto';
+const cupExpired=c=>!!c.exp&&new Date(c.exp+'T23:59:59')<new Date();
+const fmtIso=iso=>String(iso||'').split('-').reverse().join('/');
+function cupSave(){try{if(cup)localStorage.setItem(CPK,cup.code);else localStorage.removeItem(CPK)}catch(e){}}
+function cupEmail(){return String(($('#ce')&&$('#ce').value)||(S.customer&&S.customer.email)||'').trim().toLowerCase()}
+async function cupValidate(c,email){
+ if(!c||c.active===false)return 'Cupom inválido ou indisponível.';
+ if(c.area&&c.area!=='todos'&&c.area!==(IMP?'importados':'moda'))return 'Este cupom não vale nesta parte da loja.';
+ if(cupExpired(c))return 'Este cupom expirou.';
+ if(FBM){
+  if(c.max>0||(c.once&&email)){
+   let i;try{i=await FB.couponInfo(c.code,c.once?email:'')}catch(e){return 'Não foi possível validar o cupom agora.'}
+   if(c.max>0&&i.n>=c.max)return 'Este cupom esgotou.';
+   if(c.once&&i.mine)return 'Você já usou este cupom.';
+  }
+ }else{
+  const us=(S.orders||[]).filter(o=>o.coupon&&o.coupon.code===c.code&&o.status!=='Cancelado');
+  if(c.max>0&&us.length>=c.max)return 'Este cupom esgotou.';
+  if(c.once&&email&&us.some(o=>String(o.customer&&o.customer.email||'').toLowerCase()===email))return 'Você já usou este cupom.';
+ }
+ return '';
+}
+function cupDisc(){
+ if(!cup)return 0;const s=cartSub();if(s<(cup.min||0))return 0;
+ const d=cup.type==='fixed'?cup.value:s*cup.value/100;
+ return Math.round(Math.min(d,s)*100)/100;
+}
+async function cupLoad(code){
+ code=cupNorm(code);if(!code)return 'Digite o código do cupom.';
+ let c=null;
+ try{c=FBM?await FB.getCoupon(code):((S.coupons||[]).find(x=>x.code===code)||null)}catch(e){return 'Não foi possível validar o cupom agora.'}
+ const er=await cupValidate(c,cupEmail());
+ if(er){if(cup&&cup.code===code)cup=null;cupSave();return er}
+ cup=c;cupSave();return '';
+}
+async function cupApply(){
+ keepDraft();
+ const v=cupNorm($('#cupi')?$('#cupi').value:'');cupTmp=v;
+ if(!v){cupMsg='Digite o código do cupom.';cupErr=1;render();return}
+ cupMsg='Verificando…';cupErr=0;render();
+ const er=await cupLoad(v);
+ if(er){cupMsg=er;cupErr=1}else{cupMsg='Cupom aplicado!';cupErr=0;cupTmp=''}
+ render();
+}
+function cupRemove(){keepDraft();cup=null;cupSave();cupMsg='';cupErr=0;render()}
+async function cupInit(){
+ if(window.STATIC_PAGE)return;
+ let pend='',saved='';
+ try{pend=localStorage.getItem('bonely_cup_pend')||'';localStorage.removeItem('bonely_cup_pend')}catch(e){}
+ try{saved=localStorage.getItem(CPK)||''}catch(e){}
+ const code=pend||saved;
+ if(code){const er=await cupLoad(code);if(!er){render();if(pend)toast('Cupom '+cup.code+' aplicado! O desconto aparece no carrinho.')}else if(pend)toast(er)}
+ setTimeout(popMaybe,2500);
+}
+function popEligible(){
+ const p=(S.cfg||{}).popup;
+ if(!p||!p.on||!p.code||window.STATIC_PAGE||adminOk)return false;
+ if(p.area&&p.area!=='todos'&&p.area!==(IMP?'importados':'moda'))return false;
+ if(cup&&cup.code===p.code)return false;
+ try{if(localStorage.getItem('bonely_pop_'+p.id))return false}catch(e){}
+ return true;
+}
+function popMaybe(){if(view==='loja'&&!modal&&!cartOpen&&popEligible()){popOn=true;render()}}
+function popClose(){const p=(S.cfg||{}).popup;if(p){try{localStorage.setItem('bonely_pop_'+p.id,'1')}catch(e){}}popOn=false;render()}
+async function popUse(){
+ const p=(S.cfg||{}).popup;if(!p)return;
+ const er=await cupLoad(p.code);popClose();
+ if(er)toast(er);else{render();toast('Cupom '+cup.code+' aplicado!')}
+}
+function vPromo(){
+ const p=(S.cfg||{}).popup;if(!popOn||!p)return '';
+ return `<div class="modal" onclick="if(event.target===this)popClose()"><div role="dialog" aria-label="Cupom de desconto" style="width:min(420px,100%);text-align:center"><span class="st">Cupom</span><h2 style="margin:8px 0">${esc(p.title||'Presente para você')}</h2><p>${esc(p.text||'')}</p><div class="pcode">${esc(p.code)}</div><div class="row" style="justify-content:center"><button class="btn" onclick="popUse()">Usar cupom</button><button class="btn ghost" onclick="popClose()">Agora não</button></div></div></div>`;
+}
 
 function freteDemo(c){const d=Math.abs(+c[0]-8);return [{name:'PAC (exemplo)',price:+(16+d*3.2).toFixed(2),days:4+d,demo:1},{name:'SEDEX (exemplo)',price:+(26+d*5.1).toFixed(2),days:1+Math.ceil(d/2),demo:1}]}
 async function calcFrete(cep){
@@ -124,12 +204,22 @@ async function _checkout(){
  const sh=ship.opts[ship.sel];
  const items=CART().map(i=>({key:i.key,name:item(i.key).name,price:item(i.key).price,qty:i.qty,size:i.size}));
  const sub=cartSub();
+ let disc=0,cpo=null,cpcode='';
+ if(cup){
+  const fresh=FBM?await FB.getCoupon(cup.code).catch(()=>null):((S.coupons||[]).find(x=>x.code===cup.code)||null);
+  const er=await cupValidate(fresh,c.email);
+  if(er){cup=null;cupSave();cupMsg=er;cupErr=1;render();return alert('O cupom não pôde ser aplicado: '+er+' Confira o total e finalize de novo.')}
+  cup=fresh;
+  if(sub<(cup.min||0))return alert('Este cupom exige pedido mínimo de '+money(cup.min)+'.');
+  disc=cupDisc();
+  if(disc>0){cpcode=cup.code;cpo={code:cup.code,type:cup.type,value:cup.value,once:!!cup.once,discount:disc}}
+ }
  const seq=FBM?await FB.nextSeq().catch(()=>null):++S.seq;
  if(!seq)return alert('Não foi possível registrar o pedido agora. Tente de novo em instantes.');
- const o={id:'BN'+seq,date:new Date().toLocaleString('pt-BR'),ts:Date.now(),customer:{...c,cep:ship.local?'':ship.cep},items,subtotal:sub,ship:sh,total:sub+sh.price,pay:$('#cpay').value,status:STATUS[0],tracking:'',stockDone:false,area:IMP?'importados':'moda'};
+ const o={id:'BN'+seq,date:new Date().toLocaleString('pt-BR'),ts:Date.now(),customer:{...c,cep:ship.local?'':ship.cep},items,subtotal:sub,ship:sh,total:Math.round((sub-disc+sh.price)*100)/100,discount:disc,...(cpo?{coupon:cpo}:{}),pay:$('#cpay').value,status:STATUS[0],tracking:'',stockDone:false,area:IMP?'importados':'moda'};
  if(FBM){try{await FB.placeOrder(o,c)}catch(e){console.error(e);return alert('Não foi possível registrar o pedido agora. Tente de novo em instantes.')}}
- S.orders.unshift(o);saveCustomer(c);if(FBM&&S.customer)S.customer.orderIds=[...new Set([...(S.customer.orderIds||[]),o.id])];S[CK]=[];ship=null;cdraft={};cartOpen=false;save();
- const wm=`Olá, ${OWNER}! O pedido *${o.id}* foi realizado.\n\nCliente: ${c.name}\n`+items.map(i=>`• ${i.qty}x ${i.name}${i.size?' ('+i.size+')':''} - ${money(i.price*i.qty)}`).join('\n')+`\n\n${sh.local?(retira?'*Retirada na loja*':'*'+sh.name+'*\nO valor da entrega é calculado na hora da entrega.'):'Frete '+sh.name+': '+money(sh.price)}\n*Total: ${money(o.total)}*${sh.local?' (sem frete)':''}\nForma de pagamento: ${o.pay}\n\n${retira?'Retirada: combinar com a loja':'Entrega: '+c.addr+(o.customer.cep?' (CEP '+o.customer.cep+')':'')}`;
+ S.orders.unshift(o);saveCustomer(c);if(FBM&&S.customer)S.customer.orderIds=[...new Set([...(S.customer.orderIds||[]),o.id])];S[CK]=[];ship=null;cdraft={};cartOpen=false;cup=null;cupSave();cupMsg='';save();
+ const wm=`Olá, ${OWNER}! O pedido *${o.id}* foi realizado.\n\nCliente: ${c.name}\n`+items.map(i=>`• ${i.qty}x ${i.name}${i.size?' ('+i.size+')':''} - ${money(i.price*i.qty)}`).join('\n')+`\n\n${sh.local?(retira?'*Retirada na loja*':'*'+sh.name+'*\nO valor da entrega é calculado na hora da entrega.'):'Frete '+sh.name+': '+money(sh.price)}\n${disc>0?'Desconto (cupom '+cpcode+'): -'+money(disc)+'\n':''}*Total: ${money(o.total)}*${sh.local?' (sem frete)':''}\nForma de pagamento: ${o.pay}\n\n${retira?'Retirada: combinar com a loja':'Entrega: '+c.addr+(o.customer.cep?' (CEP '+o.customer.cep+')':'')}`;
  const txt=encodeURIComponent(wm);
  justOrdered=o.id;view='conta';render();scrollTo(0,0);
  window.open(`https://wa.me/${WA}?text=${txt}`,'_blank');
@@ -466,8 +556,8 @@ function tagSel(){const v=$('#ptag').value;$('#ptagc').style.display=v==='__c'?'
 const ph=p=>`<div class="ph">${p.img?`<img src="${p.img}" alt="${esc(p.name)}">`:'B'}${rib(p)}</div>`;
 
 /* Views */
-function vCatsImp(){return `<nav class="cats" aria-label="Lojas"><div class="wrap"><button class="ctile imp" onclick="document.getElementById('cat').scrollIntoView({behavior:'smooth'})"><b>Importados</b><small>Você está aqui. Ver produtos</small><span aria-hidden="true">↓</span></button><a href="${pageUrl('index')}" class="ctile"><b>Moda</b><small>Feminino e masculino</small><span aria-hidden="true">→</span></a></div></nav>`}
-function vCats(){const T=(k,t,s,h)=>`<${h?'a href="'+h+'"':'button onclick="'+k+'"'} class="ctile${h?' imp':''}"><b>${t}</b><small>${s}</small><span aria-hidden="true">→</span></${h?'a':'button'}>`;
+function vCatsImp(){return `<nav class="cats" aria-label="Lojas"><div class="wrap"><button class="ctile imp" onclick="document.getElementById('cat').scrollIntoView({behavior:'smooth'})"><b>Importados</b><small>Você está aqui. Ver produtos</small><span class="ca" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg></span></button><a href="${pageUrl('index')}" class="ctile"><b>Moda</b><small>Feminino e masculino</small><span class="ca" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a></div></nav>`}
+function vCats(){const T=(k,t,s,h)=>`<${h?'a href="'+h+'"':'button onclick="'+k+'"'} class="ctile${h?' imp':''}"><b>${t}</b><small>${s}</small><span class="ca" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></${h?'a':'button'}>`;
  return `<nav class="cats" aria-label="Categorias"><div class="wrap">${T("q='';cat('Feminino')",'Feminino','Moda feminina')}${T("q='';cat('Masculino')",'Masculino','Moda masculina')}${S.combos.length?T("goto('combos')",'Combos','Leve junto, pague menos'):''}${T('','Importados','Entrega na região ou retirada',pageUrl('importados'))}</div></nav>`}
 let KS=[];
 function kindBar(){const pool=S.products.filter(p=>match(p,1)),ks=[...new Set(pool.map(x=>x.kind).filter(Boolean))],sem=pool.some(x=>!x.kind);KS=ks;if(!ks.length)return '';
@@ -490,7 +580,7 @@ function vConta(){
  if(!c)return `<section><div class="wrap" style="max-width:420px"><h2>Minha conta</h2><p class="sub">Entre ou crie seu cadastro para acompanhar seus pedidos.</p><div class="row"><button class="btn" onclick="openLogin('')">Entrar ou cadastrar</button></div></div></section>`;
  const os=S.orders.filter(o=>o.customer.email===c.email&&oArea(o)===(IMP?'importados':'moda'));
  return `<section><div class="wrap"><h2>Olá, ${esc(c.name)}</h2><p class="sub">${esc(c.email)} · <button class="btn sm ghost" onclick="custLogout()">Sair</button></p>
- ${justOrdered?vOk(justOrdered):''}<h3 style="margin:20px 0 8px">Meus pedidos</h3>${os.length?os.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id}</b><span class="st">${o.status}</span></div><div class="tag">${o.date}</div>${o.items.map(i=>`<div class="line"><span>${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}<div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
+ ${justOrdered?vOk(justOrdered):''}<h3 style="margin:20px 0 8px">Meus pedidos</h3>${os.length?os.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id}</b><span class="st">${o.status}</span></div><div class="tag">${o.date}</div>${o.items.map(i=>`<div class="line"><span>${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}${o.coupon?`<div class="line"><span>Cupom ${esc(o.coupon.code)}</span><span>−${money(o.discount||0)}</span></div>`:''}<div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
  ${steps(o)}${trackBlock(o)}</div>`).join(''):'<div class="empty">Você ainda não fez pedidos.</div>'}</div></section>`;
 }
 function vOk(id){return `<div class="okbox"><span class="tag">Pedido realizado!</span><div class="okid">${esc(id)}</div><p>Guarde esse número do pedido. ${IMP?'Você acompanha o status aqui em <b>Minha conta</b>.':'Com ele e o seu e-mail você acompanha tudo em <b>Rastrear pedido</b>.'} A Gabriely também recebe o número no WhatsApp.</p><div class="row"><button class="btn sm" onclick="copyOrderId(this,'${id}')">Copiar número</button>${IMP?'':`<button class="btn sm ghost" onclick="trackOrder('${id}')">Acompanhar pedido</button>`}</div></div>`}
@@ -567,7 +657,7 @@ function vAreaModal(){
  return `<div class="modal" ${aarea?`onclick="if(event.target===this){apick=false;render()}"`:''}><div class="apd" role="dialog" aria-modal="true" aria-labelledby="apt"><div class="aph"><span class="spark">✦ ✧ ✦</span><h2 id="apt">${aarea?'Trocar de painel':'Olá, '+OWNER}</h2><p class="sub">${aarea?'Escolha qual painel você quer ver.':'Qual painel você quer abrir?'}</p></div><div class="apg">${card('moda')}${card('importados')}</div><div class="apf">${aarea?'<button class="btn sm ghost" onclick="apick=false;render()">Cancelar</button>':'<button class="btn sm ghost" onclick="go(\'loja\')">Voltar para a loja</button>'}</div></div></div>`;
 }
 const PAID=['Pago','Separando','Enviado','Entregue'],MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-const ATABS0=[['produtos','Produtos'],['estoque','Estoque'],['vendas','Vendas'],['pedidos','Pedidos'],['combos','Combos'],['compartilhados','Compartilhados'],['config','Configurações']];
+const ATABS0=[['produtos','Produtos'],['estoque','Estoque'],['vendas','Vendas'],['pedidos','Pedidos'],['combos','Combos'],['cupons','Cupons'],['compartilhados','Compartilhados'],['config','Configurações']];
 const ATABS=()=>ATABS0.filter(([k])=>!(k==='combos'&&aarea==='importados'));
 const aMatch=p=>!aq||p.name.toLowerCase().includes(aq.trim().toLowerCase());
 function oTs(o){if(o.ts)return o.ts;const m=String(o.date).match(/(\d+)\/(\d+)\/(\d+)/);return m?new Date(+m[3],+m[2]-1,+m[1]).getTime():Date.now()}
@@ -712,7 +802,7 @@ function vNewOrder(){
  return `<div class="modal"><div role="alertdialog" aria-label="Novo pedido" style="width:min(480px,100%)"><span class="st">Novo pedido · ${AREAS[oArea(o)].name}</span><h2 style="margin-top:8px">${o.id}</h2>${newQ.length>1?`<p class="tag">+ ${newQ.length-1} outro(s) pedido(s) novo(s)</p>`:''}
  <div class="line"><span>Cliente</span><span>${esc(o.customer.name)}</span></div><div class="line"><span>WhatsApp</span><span>${esc(o.customer.phone)}</span></div>
  ${o.items.map(i=>`<div class="line"><span>${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}
- <div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line"><span>Pagamento</span><span>${esc(o.pay||'a combinar')}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
+ ${o.coupon?`<div class="line"><span>Cupom ${esc(o.coupon.code)}</span><span>−${money(o.discount||0)}</span></div>`:''}<div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line"><span>Pagamento</span><span>${esc(o.pay||'a combinar')}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
  ${pendConf(o)?`<p class="tag" style="margin:12px 0 0">Confirme este pedido em até ${CONF_H} horas (até ${fmtDue(o)}).</p>`:''}
  <div class="row"><button class="btn" onclick="closeNew(true)">Ver pedidos</button><button class="btn ghost" onclick="closeNew(false)">Fechar</button></div></div></div>`;
 }
@@ -862,6 +952,96 @@ function saveCfg(){
 }
 function resetCfg(){if(!confirm('Voltar aos nomes e ao modelo originais deste painel?'))return;if(S.cfg)delete S.cfg[aarea];save();render();toast('Configurações restauradas.')}
 let pform=false,mvOpen=false,mvP=null;
+/* ---------- Cupons (painel) ---------- */
+function storeUrl(a){
+ if(/^https?:/.test(location.protocol||'')&&location.origin)return location.origin+(a==='importados'?'/importados':'/');
+ let d=location.href.split('#')[0].split('?')[0];d=d.slice(0,d.lastIndexOf('/')+1);
+ return d+(a==='importados'?'importados.html':'index.html');
+}
+function cupGen(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',r=crypto.getRandomValues(new Uint8Array(5));$('#cc-code').value='BN'+[...r].map(x=>a[x%a.length]).join('')}
+function cupEdit(c){cupE=c;render();scrollTo(0,0)}
+function cupTog(c){const x=(S.coupons||[]).find(y=>y.code===c);if(!x)return;x.active=x.active===false;save();render()}
+function cupDel(c){if(!confirm('Excluir o cupom '+c+'? Quem tentar usar vai ver "cupom inválido".'))return;S.coupons=(S.coupons||[]).filter(x=>x.code!==c);const p=(S.cfg||{}).popup;if(p&&p.code===c)delete S.cfg.popup;if(cupE===c)cupE='';save();render()}
+function saveCoupon(){
+ const g=id=>($('#'+id)?$('#'+id).value:'').trim(),num=v=>parseFloat(String(v).replace(',','.'))||0;
+ const code=cupNorm(g('cc-code')),type=g('cc-type')==='fixed'?'fixed':'pct',value=num(g('cc-val'));
+ if(code.length<3)return alert('O código precisa ter pelo menos 3 letras ou números.');
+ if(!(value>0))return alert('Informe o valor do desconto.');
+ if(type==='pct'&&value>100)return alert('A porcentagem máxima é 100.');
+ S.coupons=S.coupons||[];
+ const ex=S.coupons.find(x=>x.code===code);
+ if(ex&&cupE!==code)return alert('Já existe um cupom com esse código.');
+ const c={code,type,value,min:Math.max(0,num(g('cc-min'))),max:Math.max(0,parseInt(g('cc-max'),10)||0),exp:g('cc-exp'),once:!!$('#cc-once').checked,active:ex?ex.active!==false:true,area:g('cc-area')==='todos'?'todos':aarea,note:g('cc-note'),ts:ex?ex.ts:Date.now()};
+ if(ex)Object.assign(ex,c);else S.coupons.unshift(c);
+ cupE='';save();render();toast('Cupom salvo.');
+}
+function cupMsgText(c,name){
+ const u=storeUrl(c.area==='importados'?'importados':'moda')+'?cupom='+encodeURIComponent(c.code);
+ const ex=[c.min?'pedido mínimo de '+money(c.min):'',c.exp?'válido até '+fmtIso(c.exp):'',c.once?'uso único':''].filter(Boolean).join(', ');
+ return `${name?'Oi, '+name+'! ':'Oi! '}Aqui é a ${OWNER}, da Bonely Store.\n\nSeparei um cupom para você: *${c.code}*\n${cupDesc(c)}${ex?' ('+ex+')':''}.\n\nÉ só abrir o link e o desconto já entra no carrinho:\n${u}`;
+}
+function cupSend(ch){
+ const c=(S.coupons||[]).find(x=>x.code===cupSel);if(!c)return alert('Escolha um cupom.');
+ const n=cupN.trim(),w=cupW.replace(/\D/g,''),t=cupMsgText(c,n);
+ if(ch==='wa')window.open('https://wa.me/'+(w?(w.length<=11?'55'+w:w):'')+'?text='+encodeURIComponent(t),'_blank');
+ else copyText(t,()=>toast('Mensagem copiada.'));
+}
+function popSave(){
+ const c=(S.coupons||[]).find(x=>x.code===($('#pm-code')?$('#pm-code').value:''));if(!c)return alert('Escolha um cupom.');
+ S.cfg=S.cfg||{};S.cfg.popup={on:true,code:c.code,area:c.area,title:$('#pm-t').value.trim()||'Presente para você',text:$('#pm-x').value.trim(),id:String(Date.now())};
+ save();render();toast('Pop-up ativado.');
+}
+function popOff(){if(S.cfg&&S.cfg.popup)S.cfg.popup.on=false;save();render()}
+const CI={
+ copy:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+ send:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>',
+ edit:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>',
+ pause:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>',
+ play:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4l14 8-14 8V4z"/></svg>',
+ trash:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>',
+ pop:'<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>'
+};
+const cupUses=c=>(S.orders||[]).filter(o=>o.coupon&&o.coupon.code===c.code&&o.status!=='Cancelado');
+function cupStatus(c){return c.active===false?'Pausado':cupExpired(c)?'Vencido':(c.max>0&&cupUses(c).length>=c.max)?'Esgotado':'Ativo'}
+const cupBig=c=>c.type==='fixed'?(Number.isInteger(+c.value)?'R$ '+c.value:money(c.value)):String(c.value).replace('.',',')+'%';
+function cupCopy(code){copyText(code,()=>toast('Código '+code+' copiado.'))}
+function cupGoSend(code){cupSel=code;render();setTimeout(()=>{const e=document.getElementById('cup-send');if(e)e.scrollIntoView({behavior:'smooth',block:'start'})},40)}
+function cupPrev(){const c=(S.coupons||[]).find(x=>x.code===cupSel),e=document.getElementById('cup-prev');if(c&&e)e.innerHTML=fmtWA(cupMsgText(c,cupN.trim()))}
+function vCupons(){
+ const all=(S.coupons||[]).filter(x=>x.area==='todos'||x.area===aarea).sort((a,b)=>(b.ts||0)-(a.ts||0));
+ const e=all.find(x=>x.code===cupE)||{},ed=!!e.code;
+ const stOf=c=>cupStatus(c),isOn=c=>stOf(c)==='Ativo';
+ const act=all.filter(isOn),sel=act.find(x=>x.code===cupSel)||act[0];
+ if(sel)cupSel=sel.code;
+ const FIL=[['todos','Todos',all.length],['ativos','Ativos',act.length],['pausados','Pausados',all.filter(c=>stOf(c)==='Pausado').length],['encerrados','Encerrados',all.filter(c=>/Vencido|Esgotado/.test(stOf(c))).length]];
+ const ls=all.filter(c=>cupF==='todos'||(cupF==='ativos'&&isOn(c))||(cupF==='pausados'&&stOf(c)==='Pausado')||(cupF==='encerrados'&&/Vencido|Esgotado/.test(stOf(c))));
+ const totUses=all.reduce((a,c)=>a+cupUses(c).length,0),totDisc=all.reduce((a,c)=>a+cupUses(c).reduce((s,o)=>s+(+o.discount||0),0),0);
+ const tile=(l,v)=>`<div class="card tile"><small>${l}</small><b>${v}</b></div>`;
+ const pp=(S.cfg||{}).popup,opts=l=>l.map(x=>`<option value="${esc(x.code)}" ${sel&&x.code===sel.code?'selected':''}>${esc(x.code)} · ${esc(cupDesc(x))}</option>`).join('');
+ const ticket=c=>{
+  const st=stOf(c),us=cupUses(c),n=us.length,given=us.reduce((s,o)=>s+(+o.discount||0),0),pct=c.max>0?Math.min(100,Math.round(n/c.max*100)):0;
+  const dm={Ativo:'Pago',Pausado:'Aguardando pagamento',Vencido:'Cancelado',Esgotado:'Cancelado'}[st],q=esc(c.code);
+  return `<div class="cpn ${st==='Ativo'?'':'off'}"><div class="cpn-l"><b>${esc(cupBig(c))}</b><small>de desconto</small></div><div class="cpn-r">
+  <div class="cpn-h"><button class="cpn-code" onclick="cupCopy('${q}')" title="Copiar código" aria-label="Copiar código ${q}">${q}${CI.copy}</button><span class="st" data-s="${dm}">${st}</span></div>
+  <div class="cpn-m">${c.min?`<span>Mín. ${money(c.min)}</span>`:''}${c.exp?`<span>Até ${fmtIso(c.exp)}</span>`:''}${c.once?'<span>1 uso por cliente</span>':''}<span>${c.area==='todos'?'Moda e Importados':AREAS[c.area]?AREAS[c.area].name:''}</span>${c.note?`<span class="nt">${esc(c.note)}</span>`:''}</div>
+  <div class="cpn-u">${c.max>0?`<div class="prog"><i style="width:${pct}%"></i></div>`:''}<small><b>${n}</b>${c.max>0?' de '+c.max:''} ${n===1?'uso':'usos'}${c.max>0?'':' · sem limite'}${given?' · '+money(given)+' em descontos':''}</small></div>
+  <div class="cpn-a">${st==='Ativo'?`<button class="btn sm" onclick="cupGoSend('${q}')">${CI.send}Enviar</button>`:''}<button class="btn sm ghost" onclick="cupEdit('${q}')">${CI.edit}Editar</button><button class="btn sm ghost" onclick="cupTog('${q}')">${c.active===false?CI.play+'Reativar':CI.pause+'Pausar'}</button><button class="btn sm danger ibtn" onclick="cupDel('${q}')" title="Excluir cupom" aria-label="Excluir cupom ${q}">${CI.trash}</button></div></div></div>`;
+ };
+ return `<div class="tiles">${tile('Cupons ativos',act.length)}${tile('Pedidos com cupom',totUses)}${tile('Desconto concedido',money(totDisc))}</div>
+ <div class="two"><div><h3>${ed?'Editar cupom':'Novo cupom'}</h3>
+ <label for="cc-code">Código</label><div class="row" style="margin-top:0"><input id="cc-code" class="cc-code" value="${esc(e.code||'')}" ${ed?'readonly':''} placeholder="Ex.: BEMVINDA10" maxlength="24" autocapitalize="characters" style="text-transform:uppercase">${ed?'':'<button class="btn sm ghost" type="button" onclick="cupGen()">Gerar</button>'}</div>
+ <div class="fg2"><div><label for="cc-type">Tipo</label><select id="cc-type"><option value="pct" ${e.type!=='fixed'?'selected':''}>Porcentagem (%)</option><option value="fixed" ${e.type==='fixed'?'selected':''}>Valor fixo (R$)</option></select></div><div><label for="cc-val">Valor</label><input id="cc-val" type="number" min="0" step="0.01" inputmode="decimal" value="${e.value||''}"></div></div>
+ <div class="fg2"><div><label for="cc-min">Pedido mínimo (R$)</label><input id="cc-min" type="number" min="0" step="0.01" inputmode="decimal" value="${e.min||''}" placeholder="Sem mínimo"></div><div><label for="cc-max">Limite de usos</label><input id="cc-max" type="number" min="0" step="1" inputmode="numeric" value="${e.max||''}" placeholder="Sem limite"></div></div>
+ <div class="fg2"><div><label for="cc-exp">Vale até (opcional)</label><input id="cc-exp" type="date" value="${esc(e.exp||'')}"></div><div><label for="cc-area">Vale para</label><select id="cc-area"><option value="${aarea}">Só ${AREAS[aarea].name}</option><option value="todos" ${e.area==='todos'?'selected':''}>Moda e Importados</option></select></div></div>
+ <label class="cc-chk"><input type="checkbox" id="cc-once" ${ed?(e.once?'checked':''):'checked'}> Cada cliente usa uma vez só</label>
+ <label for="cc-note">Observação interna (opcional)</label><input id="cc-note" value="${esc(e.note||'')}" maxlength="60" placeholder="Ex.: campanha do Dia das Mães">
+ <div class="row"><button class="btn" onclick="saveCoupon()">${ed?'Salvar alterações':'Criar cupom'}</button>${ed?`<button class="btn ghost" onclick="cupE='';render()">Cancelar</button>`:''}</div>
+ <p class="hint">O cliente digita o código no carrinho. Com limite de usos, validade e uso único, o cupom fica restrito a quem você escolher.</p></div>
+ <div><h3>Cupons cadastrados</h3><div class="pills cpf">${FIL.map(([k,l,n])=>`<button class="${cupF===k?'on':''}" onclick="cupF='${k}';render()">${l} (${n})</button>`).join('')}</div>${ls.length?`<div class="cpl">${ls.map(ticket).join('')}</div>`:`<div class="empty">${all.length?'Nenhum cupom neste filtro.':'Nenhum cupom ainda. Crie o primeiro ao lado.'}</div>`}</div></div>
+ <div class="two" style="margin-top:28px"><div id="cup-send"><h3>Enviar cupom para um cliente</h3>${sel?`<label>Cupom</label><select onchange="cupSel=this.value;render()" aria-label="Cupom">${opts(act)}</select><div class="fg2"><div><label>Nome do cliente (opcional)</label><input value="${esc(cupN)}" oninput="cupN=this.value;cupPrev()"></div><div><label>WhatsApp (opcional)</label><input value="${esc(cupW)}" oninput="cupW=this.value" inputmode="tel" placeholder="21 99999-9999"></div></div><label>Prévia da mensagem</label><div class="cupmsg" id="cup-prev">${fmtWA(cupMsgText(sel,cupN.trim()))}</div><div class="row"><button class="btn" onclick="cupSend('wa')">${CI.send}Enviar pelo WhatsApp</button><button class="btn ghost" onclick="cupSend('copy')">${CI.copy}Copiar mensagem</button></div><p class="hint">O cliente abre o link e o cupom já entra aplicado no carrinho. Sem o WhatsApp do cliente, você escolhe o contato ao abrir o WhatsApp.</p>`:'<div class="empty">Crie um cupom ativo para poder enviar.</div>'}</div>
+ <div><h3>Pop-up na loja</h3>${pp&&pp.on?`<div class="popon"><span>${CI.pop}No ar agora: <b>${esc(pp.code)}</b></span><button class="btn sm danger" onclick="popOff()">Desativar</button></div>`:'<p class="tag">Nenhum pop-up ativo no momento.</p>'}${sel?`<label>Cupom</label><select id="pm-code" aria-label="Cupom do pop-up">${opts(act)}</select><label for="pm-t">Título</label><input id="pm-t" value="Presente para você" maxlength="40"><label for="pm-x">Mensagem</label><input id="pm-x" value="Use o cupom abaixo na sua compra." maxlength="100"><div class="row"><button class="btn" onclick="popSave()">${pp&&pp.on?'Trocar pop-up':'Ativar pop-up'}</button></div><p class="hint">Aparece uma vez para cada visitante, alguns segundos depois de entrar na loja. O botão aplica o cupom no carrinho.</p>`:''}</div></div>`;
+}
+
 /* histórico: marca movimentos de pedidos que foram cancelados ou excluídos */
 function mvTag(m){
  const r=/^(Pedido|Cancelamento|Exclusão do pedido) (BN\d+)/.exec(m.note||'');if(!r)return {};
@@ -914,7 +1094,7 @@ function vAdmin(){
   const cnt=st=>AO().filter(o=>o.status===st).length,k=aq.trim().toLowerCase();
   const l=AO().filter(o=>(ofil==='Todos'||o.status===ofil)&&(!k||o.id.toLowerCase().includes(k)||o.customer.name.toLowerCase().includes(k)));
   body=`<div class="pills">${['Todos',...STATUS].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?AO().length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
-  ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st" data-s="${o.status}">${o.status}</span></div><div class="ordm">${dlBadge(o)}${o.store?'<span class="ordk">Venda na loja</span>':''}<span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}${o.store?'':`<span>${esc(o.customer.addr)}${o.customer.cep?' · CEP '+esc(o.customer.cep):''}</span>`}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${i.size?' ('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>${o.store?'':'Frete '+esc(o.ship.name)+' '+money(o.ship.price)+' · '}Pagamento: ${esc(o.pay||'a combinar')}</small></div>
+  ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st" data-s="${o.status}">${o.status}</span></div><div class="ordm">${dlBadge(o)}${o.store?'<span class="ordk">Venda na loja</span>':''}<span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}${o.store?'':`<span>${esc(o.customer.addr)}${o.customer.cep?' · CEP '+esc(o.customer.cep):''}</span>`}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${i.size?' ('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>${o.store?'':'Frete '+esc(o.ship.name)+' '+money(o.ship.price)+' · '}Pagamento: ${esc(o.pay||'a combinar')}${o.coupon?' · Cupom '+esc(o.coupon.code)+' (−'+money(o.discount||0)+')':''}</small></div>
   <div class="row ordact">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select>${o.store?'':`<input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>`}${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
  }
  if(atab==='combos'){
@@ -925,6 +1105,7 @@ function vAdmin(){
  }
  if(atab==='config')body=vConfig();
  if(atab==='compartilhados')body=vShareAdmin();
+ if(atab==='cupons')body=vCupons();
  return `<section><div class="wrap"><div class="tabs" style="margin-top:0">${ATABS().map(([k,l])=>`<button class="${atab===k?'on':''}" onclick="atab='${k}';aq='';aedit=null;pform=false;imgDraft=null;render()">${l}${k==='pedidos'&&pend?' ('+pend+')':''}</button>`).join('')}</div>${body}</div></section>
 `;
 }
@@ -936,7 +1117,9 @@ function vCart(){
  ${ship&&ship.err?'<div class="err">CEP inválido.</div>':''}${ship&&ship.loading?'<div class="tag">Calculando…</div>':''}${ship&&ship.fail?'<div class="err">Não foi possível calcular o frete agora. Tente novamente.</div>':''}${ship&&ship.opts?ship.opts.map((o,n)=>`<label style="color:var(--tx);display:flex;gap:8px"><input type="radio" name="fr" style="width:auto" ${n===ship.sel?'checked':''} onchange="setShip(${n})"> ${o.name} · ${o.days} dias · ${money(o.price)}</label>`).join(''):''}
  `}
  ${S.customer?'':`<p class="tag" style="margin:14px 0 0">Já é cliente? <button class="lk inl" onclick="openLogin('cart')">Entre</button> e preenchemos seus dados. Se ainda não é, o cadastro é criado quando você finalizar o pedido.</p>`}<label>Nome</label><input id="cn" value="${esc(c.name)}"><label>WhatsApp</label><input id="cp" value="${esc(c.phone)}"><label>E-mail</label><input id="ce" type="email" value="${esc(c.email)}">${retira?'':`<label>${IMP?'Endereço de entrega (rua, número, bairro)':'Endereço completo'}</label><input id="ca" value="${esc(c.addr==='Retirada na loja'?'':c.addr)}">`}<label>Forma de pagamento</label><select id="cpay"><option>Pix</option><option>Cartão de crédito</option><option>Cartão de débito</option><option>A combinar</option></select>
- <div class="line total" style="margin-top:14px"><span>Total</span><span>${money(cartSub()+(sh?sh.price:0))}</span></div>${IMP&&sh?`<p class="tag">${retira?'Retirada sem custo de frete.':'Mais o valor da entrega, calculado na hora da entrega.'}</p>`:''}
+ <label for="cupi">Cupom de desconto</label>${cup?`<div class="line cupapp"><span>Cupom <b>${esc(cup.code)}</b> · ${esc(cupDesc(cup))}</span><button class="btn sm ghost" onclick="cupRemove()">Remover</button></div>`:`<div class="row" style="margin-top:0"><input id="cupi" value="${esc(cupTmp)}" placeholder="Digite seu cupom" autocapitalize="characters" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();cupApply()}"><button class="btn sm" onclick="cupApply()">Aplicar</button></div>`}${cupMsg?`<div class="${cupErr?'err':'tag'}">${esc(cupMsg)}</div>`:''}${cup&&cartSub()<(cup.min||0)?`<div class="tag">Adicione mais ${money(cup.min-cartSub())} em produtos para usar o cupom ${esc(cup.code)}.</div>`:''}
+ ${cupDisc()>0?`<div class="line" style="margin-top:14px"><span>Subtotal</span><span>${money(cartSub())}</span></div><div class="line"><span>Desconto (${esc(cup.code)})</span><span>−${money(cupDisc())}</span></div>`:''}
+ <div class="line total" style="margin-top:14px"><span>Total</span><span>${money(cartSub()-cupDisc()+(sh?sh.price:0))}</span></div>${IMP&&sh?`<p class="tag">${retira?'Retirada sem custo de frete.':'Mais o valor da entrega, calculado na hora da entrega.'}</p>`:''}
  <div class="row"><button class="btn" style="width:100%" onclick="checkout()">Finalizar pedido</button></div><p class="tag">Ao finalizar, o pedido fica salvo na sua conta e você segue com a loja para combinar o pagamento.</p>`:''}</div>`;
 }
 const IC={
@@ -992,7 +1175,7 @@ function render(){
  <a class="hbox central" href="https://wa.me/${WA}" target="_blank" rel="noopener">${IC.head}<span><small>Central de</small>Atendimento</span></a>
  <button class="hbox" onclick="${acct()}">${IC.user}<span><small>${cu?'Olá, '+esc(cu.name.split(' ')[0]):'Olá, Bem-vindo(a)'}</small>${cu?'Minha conta':'Entre ou Cadastre-se'}</span></button>
  <button class="cartbtn" onclick="cartOpen=true;render()" aria-label="Carrinho, ${n} itens">${IC.cart}${n?`<b>${n}</b>`:''}</button></div></header>`}
- <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel?'':vFooter()}${vCart()}${vMenu()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='lowstock'?vLowStock():''}${modal==='dueorder'?vDue():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><a class="fab wa" href="https://wa.me/${WA}" target="_blank" rel="noopener" aria-label="WhatsApp">${IC.wa}</a></div>`}`;
+ <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel?'':vFooter()}${vCart()}${vMenu()}${vPromo()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='lowstock'?vLowStock():''}${modal==='dueorder'?vDue():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><a class="fab wa" href="https://wa.me/${WA}" target="_blank" rel="noopener" aria-label="WhatsApp">${IC.wa}</a></div>`}`;
  if(panel&&adminOk&&!modal)setTimeout(checkNew,0);
  if(panel&&adminOk){const b=document.querySelector('.tabs button.on'),t=b&&b.parentElement;if(t)t.scrollLeft=b.offsetLeft-(t.clientWidth-b.offsetWidth)/2}
 }
@@ -1000,6 +1183,7 @@ if(window.addEventListener)window.addEventListener('storage',e=>{
  if(FBM||e.key!==K||!e.newValue)return;
  try{const old=S.orders.length;S=JSON.parse(e.newValue);if(view==='admin'&&adminOk&&S.orders.length!==old)render()}catch(_){}
 });
+try{const u=new URLSearchParams(location.search).get('cupom');if(u&&!window.STATIC_PAGE)localStorage.setItem('bonely_cup_pend',String(u).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24))}catch(e){}
 (function(){
  const mp=(location.pathname||'').match(/\/produto\/[^/]*-(\d+)\/?$/);
  if(!window.STATIC_PAGE&&mp){pid=mp[1];view='produto';return}
@@ -1022,7 +1206,7 @@ async function boot(){
   try{
    let ses={};try{ses=JSON.parse(localStorage.getItem(SK))||{}}catch(e){}
    const d=await FB.loadPublic();
-   S={colls:[],products:d.products,combos:d.combos,orders:[],moves:[],expenses:[],shares:[],customers:[],cfg:{},goals:{},seen:[],seq:1000,cart:[],cartImp:[],customer:null,...ses};
+   S={colls:[],products:d.products,combos:d.combos,orders:[],moves:[],expenses:[],shares:[],customers:[],cfg:{},goals:{},seen:[],seq:1000,cart:[],cartImp:[],coupons:[],customer:null,...ses};
    if(d.pub){S.colls=d.pub.colls||[];S.cfg=d.pub.cfg||{}}
    FBM=true;
    if(S.customer){S.customers=[S.customer];await loadMine()}
@@ -1030,6 +1214,7 @@ async function boot(){
   }catch(e){console.error(e);FBM=false;return msgBox('<div>Não foi possível carregar a loja agora.<br><br><button class="btn" onclick="location.reload()">Tentar de novo</button></div>')}
  }
  render();
+ cupInit();
  if(pg){setTimeout(()=>{const e=document.getElementById(pg);if(e)e.scrollIntoView();pg=''},60)}
 }
 boot();

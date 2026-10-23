@@ -15,8 +15,8 @@ const cfg={
 const FB=window.FB={on:false,admin:false,loaded:false,user:null,onerr:null};
 let db,auth,F,U,listening=false,tm=0;
 const snap={};            // coleção -> Map(docId -> json canônico), para gravar só o que mudou
-const SYNC=['products','combos','orders','moves','shares','expenses'];
-const keyOf={products:x=>String(x.id),combos:x=>String(x.id),orders:x=>x.fid||x.id,moves:x=>x._id,shares:x=>x._id,expenses:x=>String(x.id)};
+const SYNC=['products','combos','orders','moves','shares','expenses','coupons'];
+const keyOf={products:x=>String(x.id),combos:x=>String(x.id),orders:x=>x.fid||x.id,moves:x=>x._id,shares:x=>x._id,expenses:x=>String(x.id),coupons:x=>x.code};
 
 const canon=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.keys(x).sort().reduce((o,k)=>(o[k]=x[k],o),{}):x);
 const clean=x=>JSON.parse(JSON.stringify(x));
@@ -44,6 +44,14 @@ FB.loadPublic=async()=>{
   const by=(a,b)=>(a.id||0)-(b.id||0);
   return{products:p.docs.map(d=>d.data()).sort(by),combos:c.docs.map(d=>d.data()).sort(by),pub:s.exists()?s.data():null};
 };
+/* cupons: a loja só consegue ler UM cupom por código (get), nunca listar */
+FB.getCoupon=async code=>{const s=await F.getDoc(dref('coupons',code));return s.exists()?s.data():null};
+FB.couponInfo=async(code,email)=>{
+  const [u,m]=await Promise.all([
+    F.getDoc(dref('couponUse',code)).catch(()=>null),
+    email?H(email).then(eh=>F.getDoc(dref('couponUsers',code+'_'+eh))).catch(()=>null):Promise.resolve(null)]);
+  return{n:u&&u.exists()?(u.data().n||0):0,mine:!!(m&&m.exists())};
+};
 FB.nextSeq=()=>F.runTransaction(db,async t=>{
   const r=dref('counters','orders'),s=await t.get(r),n=(s.exists()?s.data().seq:1000)+1;
   t.set(r,{seq:n});return n;
@@ -57,6 +65,7 @@ FB.placeOrder=async(o,c)=>{
   b.set(dref('orders',fid),clean(o));
   b.set(dref('customers',eh),{name:c.name||'',email:c.email,phone:c.phone||'',addr:c.addr==='Retirada na loja'?'':(c.addr||''),orderIds:F.arrayUnion(o.id)},{merge:true});
   if(pk&&!(ps&&ps.exists()))b.set(dref('phoneIdx',pk),{eh});
+  if(o.coupon&&o.coupon.code){const cc=o.coupon.code;b.set(dref('couponUse',cc),{n:F.increment(1)},{merge:true});if(o.coupon.once)b.set(dref('couponUsers',cc+'_'+eh),{ts:o.ts,order:o.id})}
   await b.commit();
 };
 FB.findCustomer=async v=>{
@@ -105,7 +114,7 @@ FB.loadAdmin=async S=>{
     F.getDoc(dref('settings','public')),F.getDoc(dref('settings','admin')),F.getDoc(dref('counters','orders'))]);
   names.forEach((n,i)=>{S[n]=res[i].docs.map(d=>d.data())});
   const byId=(a,b)=>(a.id||0)-(b.id||0),byTs=(a,b)=>(b.ts||0)-(a.ts||0);
-  S.products.sort(byId);S.combos.sort(byId);S.orders.sort(byTs);S.moves.sort(byTs);S.shares.sort(byTs);S.expenses.sort(byTs);
+  S.products.sort(byId);S.combos.sort(byId);S.orders.sort(byTs);S.moves.sort(byTs);S.shares.sort(byTs);S.expenses.sort(byTs);S.coupons.sort(byTs);
   const pub=sp.exists()?sp.data():{},adm=sa.exists()?sa.data():{};
   S.colls=pub.colls||[];S.cfg=pub.cfg||{};
   S.goals=adm.goals||{};S.goal=adm.goal||0;S.seen=adm.seen||[];
