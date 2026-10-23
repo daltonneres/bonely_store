@@ -15,7 +15,7 @@ const dt=(ts,d)=>ts?new Date(ts).toLocaleDateString('pt-BR'):(d||'');
 
 /* ---------- base de conhecimento (alinhada às páginas de Privacidade e Cancelamento) ---------- */
 const SUBJ={order:'Consulta de pedido',cancel:'Cancelamento de pedido',arrep:'Desistência (direito de arrependimento)',defeito:'Troca por defeito',tamanho:'Troca por tamanho',reemb:'Reembolso',compra:'Ajuda na compra (auxiliar de compra)',outro:'Outro assunto'};
-const MENU=[['Auxiliar de compra','shop'],['Simular frete','frete'],['Consultar meu pedido','order'],['Cancelar ou trocar','cx'],['Tirar uma dúvida','faq'],['Falar com a '+OWNER,'human']];
+const MENU=[['Auxiliar de compra','shop'],['Produto esgotado / lista de espera','waitlist'],['Simular frete','frete'],['Consultar meu pedido','order'],['Cancelar ou trocar','cx'],['Tirar uma dúvida','faq'],['Falar com a '+OWNER,'human']];
 const FAQ=[
  {id:'frete',lbl:'Frete e entrega',k:/frete|prazo|entreg|envio|enviam|chega|correios|retirad|retirar|cep/,
   a:()=>IMP
@@ -95,6 +95,7 @@ async function say(...parts){
 
 /* ---------- abrir / fechar ---------- */
 window.midOpen=function(){
+ dismissTeaser();
  M.admin=!!(typeof view!=='undefined'&&view==='admin'&&typeof adminOk!=='undefined'&&adminOk&&typeof aarea!=='undefined'&&aarea);
  const el=shell();el.hidden=false;document.body.classList.add('mid-open');
  const sub=el.querySelector('.mid-t small'),foot=el.querySelector('.mid-wa');
@@ -117,6 +118,21 @@ function greet(){
  say('Olá! Eu sou a *Midily*, assistente virtual da Bonely Store.',
   {t:'Para começar, como posso te chamar?',chips:f?[['Sou '+f,'name:'+full]]:undefined});
 }
+function dismissTeaser(){
+ const e=document.getElementById('midily-teaser');if(e)e.remove();
+ try{sessionStorage.setItem('midily_welcome_seen','1')}catch(_){ }
+}
+window.midDismiss=dismissTeaser;
+function scheduleTeaser(){
+ try{if(sessionStorage.getItem('midily_welcome_seen'))return}catch(_){ }
+ setTimeout(()=>{
+  if(document.body.classList.contains('is-panel')||document.getElementById('midily-teaser')||document.body.classList.contains('mid-open'))return;
+  const e=document.createElement('div');e.id='midily-teaser';e.className='mid-teaser';e.setAttribute('role','status');
+  e.innerHTML='<button type="button" class="mid-teaser-open" onclick="midOpen()"><span class="mid-teaser-av" aria-hidden="true">M</span><span><b>Oi, eu sou a Midily!</b><small>Posso ajudar você a escolher uma peça ou fazer sua compra.</small><i>Conversar comigo <span aria-hidden="true">→</span></i></span></button><button type="button" class="mid-teaser-x" onclick="midDismiss()" aria-label="Fechar mensagem">×</button>';
+  document.body.appendChild(e);
+ },2600);
+}
+scheduleTeaser();
 
 /* ---------- entrada do usuário ---------- */
 window.midSend=function(e){
@@ -145,6 +161,7 @@ function intent(t){
  const n=norm(t);
  if(/atendente|gabriely|humano|falar com (a )?(alguem|pessoa|dona|loja)|quero falar/.test(n))return 'human';
  if(/cancel|desist|arrepen|reembols|estorn|devol|trocar|troca\b|defeit|errad|nao serviu|nao coube|apertad|rasgad|manchad/.test(n))return 'cx';
+ if(/lista de espera|esgotad|sem estoque|acabou|sem disponib/.test(n))return 'waitlist';
  if(/meu pedido|minha compra|rastre|cade (o|meu)|status|chegou|encomenda|bn\s?-?\d{3,}/.test(n))return 'order';
  if(SHOP_RE.test(n))return 'shop';
  return '';
@@ -222,6 +239,11 @@ async function route(txt,val){
     if(!q)return await say({t:qWord()+' você quer levar? Pode escolher abaixo ou digitar um número.',chips:qtyChips()});
     return await act('qty:'+q);
    }
+   case 'wait_product':{
+    const p=waitMatch(txt);
+    if(p)return await act('waitprod:'+p.id);
+    return await waitStart(txt);
+   }
    case 'ord_id':{
     const id=parseId(txt,true);
     if(!id){M.idFails++;return await say(M.idFails>=2?{t:'Não consegui identificar o número. Ele fica no comprovante e começa com *BN*. Quer tentar de novo ou falar com a '+OWNER+'?',chips:[['Tentar de novo','retry'],['Continuar sem o pedido','skipord'],['Voltar ao início','menu']]}:'Não consegui identificar o número. Ele começa com *BN* seguido de números, por exemplo BN1001.')}
@@ -259,6 +281,7 @@ async function free(t){
  const k=intent(t),seed=()=>{if(t.length>=25&&!M.c.story)M.c.story=clip(t)};
  if(k==='human'){seed();return act('human')}
  if(k==='cx'){seed();const s=subOf(t);return s?act('cx:'+s):act('cx')}
+ if(k==='waitlist')return act('waitlist');
  if(k==='order'){seed();const id=parseId(t);if(id){M.c.sub='order';M.c.id=id;return afterId()}return act('order')}
  if((/frete|\bcep\b|prazo de entrega|quanto (custa|fica) (pra|para) (enviar|mandar|entregar)/.test(norm(t)))&&(cepOf(t)||/simul|calcul|quanto|valor|custa|fica/.test(norm(t)))){if(IMP)return act('frete');M.c.frCep=cepOf(t);return act('frete')}
  if(k==='shop'){M.c.shopPre=parseBudget(t);return act('shop')}
@@ -277,6 +300,8 @@ async function act(v){
  }
  if(v.startsWith('name:'))return setName(v.slice(5).trim());
  if(v==='shop')return shopStart();
+ if(v==='waitlist')return waitStart();
+ if(v.startsWith('waitprod:'))return waitProduct(v.slice(9));
  if(v==='frete')return freteStart();
  if(v.startsWith('bud:')){M.c.shop=M.c.shop||{};M.c.shop.bud=+v.slice(4);return (M.c.shop.keep&&M.c.shop.n)?shopResults():shopFor()}
  if(v.startsWith('for:')){M.c.shop=M.c.shop||{};M.c.shop.gen=v.slice(4);return shopQty()}
@@ -339,6 +364,31 @@ const unit=()=>IMP?'itens':'peças';
 const qWord=()=>IMP?'Quantos itens':'Quantas peças';
 const un=k=>k===1?(IMP?'item':'peça'):unit();
 const qtyChips=()=>[['1 '+un(1),'qty:1'],['2 '+unit(),'qty:2'],['3 '+unit(),'qty:3'],['O máximo que couber','qty:max']];
+function waitProducts(){
+ const P=(typeof S!=='undefined'&&S.products)||[];
+ return P.filter(p=>IMP===(p.type==='avulso')&&Number(p.stock)<=0);
+}
+function waitMatch(txt){
+ const n=norm(txt),P=waitProducts();
+ return P.find(p=>n.includes(norm(p.name)))||null;
+}
+async function waitStart(txt){
+ const P=waitProducts(),found=txt&&waitMatch(txt);
+ if(found)return waitProduct(found.id);
+ M.step='wait_product';
+ if(!P.length){M.step='menu';return say({t:'No momento não encontrei produtos totalmente esgotados neste catálogo. Você pode conferir as opções de cada peça na loja ou me pedir ajuda para escolher uma alternativa.',chips:[['Auxiliar de compra','shop'],['Ver produtos','menu'],['Falar com a '+OWNER,'human']]})}
+ const chips=P.slice(0,8).map(p=>[p.name,'waitprod:'+p.id]);
+ return say({t:'Posso te ajudar a entrar na lista de espera. Qual produto esgotado você quer?',chips:[...chips,['Voltar ao início','menu']]});
+}
+async function waitProduct(id){
+ const p=(S.products||[]).find(x=>String(x.id)===String(id));
+ if(!p)return waitStart();
+ M.step='menu';
+ const available=Number(p.stock)>0;
+ return say({t:available?'O estoque de *'+p.name+'* foi atualizado e agora aparece disponível. Abra a página para conferir as opções e adicionar ao carrinho.':'Encontrei *'+p.name+'*. Abra a página do produto e toque em *Entrar na lista de espera*. Depois informe seus dados e finalize a solicitação. Ela fica registrada como lista de espera, sem confirmação de pagamento; a '+OWNER+' entra em contato quando houver disponibilidade.',
+  links:[[available?'Ver produto':'Entrar na lista de espera',prodPath(p)]],
+  chips:[['Ver outros esgotados','waitlist'],['Voltar ao início','menu']]});
+}
 const onSale=p=>+p.oldPrice>+p.price;
 const tot=s=>s.reduce((a,p)=>a+ +p.price,0);
 const sigOf=s=>s.map(p=>p.id).sort().join(',');

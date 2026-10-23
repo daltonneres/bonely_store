@@ -1001,10 +1001,22 @@ body.is-panel .popon .ic{width:16px;height:16px;color:#8fb08a}
 .mid-f button{flex:none;width:44px;height:44px;border-radius:50%;border:0;background:var(--gold);color:#1a1409;display:grid;place-items:center}
 .mid-wa{padding:0 14px 12px;text-align:center;font-size:12.5px;color:var(--mut)}
 .mid-wa a{color:var(--gold2)}
+.mid-teaser{position:fixed;right:22px;bottom:calc(92px + env(safe-area-inset-bottom,0px));z-index:9;display:flex;align-items:flex-start;gap:6px;width:min(330px,calc(100vw - 32px));padding:9px 34px 9px 9px;border:1px solid rgba(201,162,95,.55);border-radius:16px;background:linear-gradient(145deg,#211a10,#12100d 78%);box-shadow:0 16px 42px rgba(0,0,0,.48);animation:midin .25s ease-out}
+.mid-teaser:after{content:"";position:absolute;right:21px;bottom:-6px;width:10px;height:10px;background:#12100d;border-right:1px solid rgba(201,162,95,.55);border-bottom:1px solid rgba(201,162,95,.55);transform:rotate(45deg)}
+.mid-teaser-open{display:flex;align-items:flex-start;gap:11px;width:100%;padding:4px;border:0;background:none;text-align:left;color:var(--tx);cursor:pointer;font:inherit}
+.mid-teaser-av{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:50%;background:linear-gradient(145deg,#e5c78d,#b58a49);color:#1a1409;font:600 22px 'Cormorant Garamond',serif;box-shadow:0 4px 14px rgba(201,162,95,.22)}
+.mid-teaser-open b,.mid-teaser-open small,.mid-teaser-open i{display:block}
+.mid-teaser-open b{margin:1px 0 3px;color:var(--gold2);font-weight:500;font-size:14px}
+.mid-teaser-open small{color:#c0b5a2;font-size:12.5px;line-height:1.4}
+.mid-teaser-open i{margin-top:7px;color:var(--gold2);font-size:12px;font-style:normal;letter-spacing:.02em}
+.mid-teaser-x{position:absolute;top:5px;right:6px;width:27px;height:27px;border:0;border-radius:50%;background:rgba(255,255,255,.04);color:var(--mut);font:20px/1 Jost,sans-serif;cursor:pointer}
+.mid-teaser-x:hover{background:rgba(255,255,255,.1);color:var(--tx)}
+.is-panel .mid-teaser{display:none}
 @media (max-width:700px){
  .mid{inset:0;width:100%;height:100dvh;border:0;border-radius:0;padding-top:env(safe-area-inset-top,0px)}
  body.mid-open{overflow:hidden}
  .mm{max-width:92%}
+ .mid-teaser{right:16px;bottom:calc(88px + env(safe-area-inset-bottom,0px));width:min(320px,calc(100vw - 32px))}
 }
 @media (prefers-reduced-motion:reduce){.mid{animation:none}.dots i{animation:none;opacity:.6}}
 
