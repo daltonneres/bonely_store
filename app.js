@@ -660,6 +660,21 @@ function vAreaModal(){
 const PAID=['Pago','Separando','Enviado','Entregue'],MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const ATABS0=[['produtos','Produtos'],['estoque','Estoque'],['vendas','Vendas'],['extrato','Extrato'],['pedidos','Pedidos'],['combos','Combos'],['cupons','Cupons'],['compartilhados','Compartilhados'],['config','Configurações']];
 const ATABS=()=>ATABS0.filter(([k])=>!(k==='combos'&&aarea==='importados'));
+/* Atalhos usados pela Midily no painel: abrem os formulários já existentes. */
+window.midPanelGo=function(dest){
+ if(!(view==='admin'&&adminOk&&aarea))return false;
+ if(dest==='finance'){atab='extrato';mvOpen=false}
+ else if(dest==='orders'){atab='pedidos';mvOpen=false}
+ else if(dest==='stock'||dest==='sale'){atab='estoque';mvOpen=true}
+ else return false;
+ aq='';render();
+ setTimeout(()=>{
+  if(dest==='sale'){const t=$('#mt');if(t){t.value='venda';mvType()}}
+  const e=dest==='finance'?document.querySelector('.sec'):dest==='orders'?document.querySelector('.ord'):document.querySelector('.fold');
+  if(e)e.scrollIntoView({behavior:'smooth',block:'center'});
+ },60);
+ return true;
+};
 const aMatch=p=>!aq||p.name.toLowerCase().includes(aq.trim().toLowerCase());
 function oTs(o){if(o.ts)return o.ts;const m=String(o.date).match(/(\d+)\/(\d+)\/(\d+)/);return m?new Date(+m[3],+m[2]-1,+m[1]).getTime():Date.now()}
 const paidOrders=()=>AO().filter(o=>PAID.includes(o.status));
@@ -1168,7 +1183,7 @@ function vFooter(){
  <div class="copy">© ${new Date().getFullYear()} Bonely Store. Todos os direitos reservados.<br>Desenvolvido por <a href="https://linkneres.vercel.app/" target="_blank" rel="noopener">Dalton Neres</a> | Full Stack developer</div>
  </div></footer>`;
 }
-function go(v){clearUrl();if(v!=='conta')justOrdered=null;if(v!=='rastreio')trkPre=null;pg='';if(v!=='admin'){aarea=null;apick=false;aedit=null}view=v;cartOpen=false;menu=false;render();scrollTo(0,0)}
+function go(v){if(view==='admin'&&v!=='admin'&&window.midClose)window.midClose();clearUrl();if(v!=='conta')justOrdered=null;if(v!=='rastreio')trkPre=null;pg='';if(v!=='admin'){aarea=null;apick=false;aedit=null}view=v;cartOpen=false;menu=false;render();scrollTo(0,0)}
 function render(){
  if(view==='admin'&&CLEAN&&!window.STATIC_PAGE){try{const u=panelUrl();if(location.pathname!==u)history.replaceState(null,'',u)}catch(e){}}
  if(window.STATIC_PAGE&&view!=='doc'){location.href=pageUrl('index')+'?'+new URLSearchParams({v:view,f:filter,c:collF,q:q,g:pg});return}
@@ -1181,7 +1196,7 @@ function render(){
  <button class="hbox central" onclick="midOpen()" aria-haspopup="dialog">${IC.head}<span><small>Central de</small>Atendimento</span></button>
  <button class="hbox" onclick="${acct()}">${IC.user}<span><small>${cu?'Olá, '+esc(cu.name.split(' ')[0]):'Olá, Bem-vindo(a)'}</small>${cu?'Minha conta':'Entre ou Cadastre-se'}</span></button>
  <button class="cartbtn" onclick="cartOpen=true;render()" aria-label="Carrinho, ${n} itens">${IC.cart}${n?`<b>${n}</b>`:''}</button></div></header>`}
- <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel?'':vFooter()}${vCart()}${vMenu()}${vPromo()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='lowstock'?vLowStock():''}${modal==='dueorder'?vDue():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><button class="fab chat" onclick="midOpen()" aria-label="Conversar com a Midily" aria-haspopup="dialog">${IC.chat}</button></div>`}`;
+ <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel&&adminOk&&aarea&&!apick?`<div class="fabs"><button class="fab chat" onclick="midOpen()" aria-label="Abrir Midily no painel" aria-haspopup="dialog">${IC.chat}<span class="fab-label">Midily</span></button></div>`:''}${panel?'':vFooter()}${vCart()}${vMenu()}${vPromo()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='lowstock'?vLowStock():''}${modal==='dueorder'?vDue():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><button class="fab chat" onclick="midOpen()" aria-label="Conversar com a Midily" aria-haspopup="dialog">${IC.chat}</button></div>`}`;
  if(panel&&adminOk&&!modal)setTimeout(checkNew,0);
  if(panel&&adminOk){const b=document.querySelector('.tabs button.on'),t=b&&b.parentElement;if(t)t.scrollLeft=b.offsetLeft-(t.clientWidth-b.offsetWidth)/2}
 }

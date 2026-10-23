@@ -6,7 +6,7 @@
 if(window.__midily)return;window.__midily=1;
 
 const SS='midily_v1'; /* chave antiga: só é limpa, a conversa NÃO é mais guardada */
-const M={msgs:[],step:'menu',c:{},typing:false,busy:false,fails:0,idFails:0,nameFails:0,gen:0,closed:true};
+const M={msgs:[],step:'menu',c:{},typing:false,busy:false,fails:0,idFails:0,nameFails:0,gen:0,closed:true,admin:false};
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const fmt=t=>esc(t).replace(/\*([^*\n]+)\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
@@ -52,10 +52,10 @@ function shell(){
  if(el)return el;
  el=document.createElement('div');el.id='midily';el.className='mid';el.hidden=true;
  el.setAttribute('role','dialog');el.setAttribute('aria-label','Conversa com a Midily');
- el.innerHTML=`<div class="mid-h"><span class="mid-av" aria-hidden="true">M</span><div class="mid-t"><b>Midily</b><small>Assistente virtual da Bonely Store</small></div><button type="button" class="mid-x" onclick="midClose()" aria-label="Fechar conversa">${ICO.x}</button></div>
+ el.innerHTML=`<div class="mid-h"><span class="mid-av" aria-hidden="true">M</span><div class="mid-t"><b>Midily</b><small>${M.admin?'Assistente de gestão da loja':'Assistente virtual da Bonely Store'}</small></div><button type="button" class="mid-x" onclick="midClose()" aria-label="Fechar conversa">${ICO.x}</button></div>
  <div class="mid-b" id="mid-b" aria-live="polite"></div>
  <form class="mid-f" onsubmit="midSend(event)" autocomplete="off"><input id="mid-i" placeholder="Escreva sua mensagem" aria-label="Sua mensagem" maxlength="600"><button type="submit" aria-label="Enviar">${ICO.send}</button></form>
- <div class="mid-wa">Prefere falar direto? <a href="https://wa.me/${WA}" target="_blank" rel="noopener">Abrir o WhatsApp</a></div>`;
+ <div class="mid-wa">${M.admin?'Ações realizadas nos formulários protegidos do painel.':`Prefere falar direto? <a href="https://wa.me/${WA}" target="_blank" rel="noopener">Abrir o WhatsApp</a>`}</div>`;
  document.body.appendChild(el);
  el.addEventListener('keydown',e=>{if(e.key==='Escape')midClose()});
  return el;
@@ -95,7 +95,11 @@ async function say(...parts){
 
 /* ---------- abrir / fechar ---------- */
 window.midOpen=function(){
+ M.admin=!!(typeof view!=='undefined'&&view==='admin'&&typeof adminOk!=='undefined'&&adminOk&&typeof aarea!=='undefined'&&aarea);
  const el=shell();el.hidden=false;document.body.classList.add('mid-open');
+ const sub=el.querySelector('.mid-t small'),foot=el.querySelector('.mid-wa');
+ if(sub)sub.textContent=M.admin?'Assistente de gestão da loja':'Assistente virtual da Bonely Store';
+ if(foot)foot.innerHTML=M.admin?'Ações realizadas nos formulários protegidos do painel.':`Prefere falar direto? <a href="https://wa.me/${WA}" target="_blank" rel="noopener">Abrir o WhatsApp</a>`;
  M.closed=false;
  if(!M.msgs.length)greet();else paint();
  setTimeout(()=>{const i=document.getElementById('mid-i');if(i)i.focus()},50);
@@ -107,6 +111,7 @@ window.midClose=function(){
  M.closed=true;reset();
 };
 function greet(){
+ if(M.admin){M.step='admin';return say({t:'Oi, Gabriely! Eu sou a Midily, sua parceira para todos os momentos. Posso abrir os formulários para você. O que precisa fazer agora?',chips:[['Registrar despesa ou receita','adm:finance'],['Atualizar estoque','adm:stock'],['Registrar venda/pedido manual','adm:sale'],['Consultar pedidos','adm:orders']]})}
  const full=(typeof S!=='undefined'&&S.customer&&S.customer.name)?clip(S.customer.name,60):'',f=full.split(' ')[0];
  M.step='name0';M.c={};M.nameFails=0;
  say('Olá! Eu sou a *Midily*, assistente virtual da Bonely Store.',
@@ -178,6 +183,7 @@ function prodAnswer(t){
 /* ---------- roteador ---------- */
 async function route(txt,val){
  try{
+  if(M.admin)return await adminRoute(txt,val);
   if(val)return await act(val);
   const n=norm(txt);
   if(M.step!=='name0'&&/^(menu|inicio|comecar|recomecar|reiniciar|voltar)\b/.test(n))return await act('menu');
@@ -238,6 +244,14 @@ async function route(txt,val){
   }
   return await free(txt);
  }catch(e){console.error('Midily',e);M.busy=false;M.typing=false;paint();say({t:'Tive um probleminha aqui. Quer falar direto com a '+OWNER+'?',chips:[['Falar com a '+OWNER,'human'],['Voltar ao início','menu']]})}
+}
+async function adminRoute(txt,val){
+ const v=val||'';
+ if(v==='adm:finance'||/despes|receit|financeir|extrato/.test(norm(txt))){window.midPanelGo&&window.midPanelGo('finance');return say('Abri *Extrato*. Lá você registra uma despesa ou receita, informa valor, data e categoria. O lançamento fica salvo no painel.')}
+ if(v==='adm:stock'||/estoque|repor|entrada de produto|atualizar estoque/.test(norm(txt))){window.midPanelGo&&window.midPanelGo('stock');return say('Abri *Estoque* e o formulário de movimentação. Escolha o produto e o tamanho, depois informe entrada, venda ou ajuste e a quantidade.')}
+ if(v==='adm:sale'||/venda|vender|balcao|loja fisica|registrar pedido|pedido manual|criar pedido/.test(norm(txt))){window.midPanelGo&&window.midPanelGo('sale');return say('Abri *Estoque* já com “Venda fora do site” selecionado. Informe produto, tamanho, quantidade, valor e pagamento. Ao registrar, a venda vira um pedido no painel, entra no faturamento e dá baixa no estoque.')}
+ if(v==='adm:orders'||/pedido|pedidos/.test(norm(txt))){window.midPanelGo&&window.midPanelGo('orders');return say('Abri a lista de *Pedidos* para você consultar e atualizar os pedidos recebidos pela loja.')}
+ return say('Posso te levar direto ao formulário certo. Escolha uma opção:',{chips:[['Registrar despesa ou receita','adm:finance'],['Atualizar estoque','adm:stock'],['Registrar venda/pedido manual','adm:sale'],['Consultar pedidos','adm:orders']]});
 }
 const clip=(s,n)=>String(s).replace(/\s+/g,' ').trim().slice(0,n||500);
 

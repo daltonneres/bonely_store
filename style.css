@@ -941,6 +941,8 @@ body.is-panel .popon .ic{width:16px;height:16px;color:#8fb08a}
 /* ---------- Midily (chat de atendimento) ---------- */
 .fab.chat{background:var(--bg2);color:var(--gold);border:1px solid var(--gold)}
 .fab.chat:hover{background:var(--gold);color:#1a1409}
+.is-panel .fab.chat{width:auto;min-width:54px;padding:0 16px;grid-auto-flow:column;gap:9px;border-radius:28px;font:500 14px 'Jost',sans-serif}
+.is-panel .fab.chat .ic{width:23px;height:23px}
 .mid{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:10;width:min(390px,calc(100vw - 24px));height:min(620px,calc(100dvh - 40px));display:flex;flex-direction:column;background:var(--bg2);border:1px solid var(--gold);border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.65);overflow:hidden;animation:midin .22s ease-out}
 .mid[hidden]{display:none}
 @keyframes midin{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
