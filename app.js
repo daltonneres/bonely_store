@@ -171,7 +171,7 @@ function addCart(key,desired){
  const sel=$('#sz'+key),size=sel?sel.value:'';
  const ex=CART().find(i=>i.key==key&&i.size==size);
  const q=desired||((ex?ex.qty:0)+1),wait=q>stockOf(key,size);
- if(wait&&!confirm(`Temos ${stockOf(key,size)} unidade(s) disponível(is)${size&&size!=='Único'?' no tamanho '+size:''}, mas você pediu ${q}. Quer registrar este item na lista de espera?`))return;
+ if(wait&&!confirm(`Temos ${stockOf(key,size)} unidade(s) disponível(is)${size&&size!=='Único'?(isImpP(item(key).p)?' na opção '+size:' no tamanho '+size):''}, mas você pediu ${q}. Quer registrar este item na lista de espera?`))return;
  if(ex){ex.qty=q;ex.waitlist=wait}else CART().push({key,size,qty:q,...(wait?{waitlist:true}:{})});
  save();cartOpen=true;render();
 }
@@ -289,12 +289,13 @@ function addProd(){
  const n=$('#pn').value.trim(),pr=parseFloat($('#pp').value);
  if(!n||isNaN(pr))return alert('Informe nome e preço.');
  const v=id=>$(id)?$(id).value.trim():'';
- const has=id=>!!$(id),d={...(aedit?{}:{coll:'',sizes:'Único',brand:'',desc:'',specs:''}),name:n,price:pr,gen:$('#pg')?$('#pg').value:''};
+ const has=id=>!!$(id),d={...(aedit?{}:{coll:'',sizes:'Único',color:'',brand:'',desc:'',specs:''}),name:n,price:pr,gen:$('#pg')?$('#pg').value:''};
+ if(has('#pcolor'))d.color=v('#pcolor');
  if(has('#ptag')){const sv=$('#ptag').value,tg=sv==='__c'?v('#ptagc'):sv,old=tg==='Promoção'?parseFloat(String($('#pold').value).replace(',','.')):0;
   if(tg==='Promoção'&&!(old>pr))return alert('Na promoção, o preço antigo precisa ser maior que o preço atual.');
   d.tag=tg;d.oldPrice=old>0?old:0}
  if(has('#pc'))d.coll=v('#pc');if(has('#pk'))d.kind=v('#pk');if(has('#popts')){const ck=[...document.querySelectorAll('#popts .po:checked')].map(e=>e.value),ex=parseOpts(v('#pxo')).filter(x=>!ck.some(y=>y.toLowerCase()===x.toLowerCase()));
-  if(!ck.length&&!ex.length)return alert('Marque ao menos uma opção em "'+fc('sizes').l+'" (tamanho ou sabor). O estoque é controlado por opção.');
+  if(!ck.length&&!ex.length)return alert('Marque ao menos uma opção em "'+fc('sizes').l+'". O estoque é controlado por opção.');
   const nw=[...document.querySelectorAll('#popts .po[data-new]')].filter(e=>e.checked).map(e=>e.value),add=[...nw,...ex];
   if(add.length){S.cfg=S.cfg||{};const c=S.cfg[aarea]=S.cfg[aarea]||{f:{}},o=optCfg();c.opt={name:(c.opt&&c.opt.name)||'',list:[...o.list,...add.filter((x,i)=>add.findIndex(y=>y.toLowerCase()===x.toLowerCase())===i&&!o.list.some(y=>y.toLowerCase()===x.toLowerCase()))]}}
   d.sizes=[...ck,...ex].join(',')}if(has('#pm'))d.brand=v('#pm');if(has('#pd'))d.desc=v('#pd');if(has('#px'))d.specs=cleanSpecs(v('#px'));
@@ -303,7 +304,7 @@ function addProd(){
  document.querySelectorAll('.pqs').forEach(e=>nv[e.dataset.s]=Math.max(0,parseInt(e.value)||0));
  const newStk={};szF.forEach(x=>{newStk[x]=nv[x]||0});
  if(aedit){const p=epr;if(p){
-   if(hasGrid&&!hasStk(p)&&p.stock>0&&!sumOf(newStk)&&!confirm('Nenhum tamanho está com estoque informado. As '+p.stock+' peças deste produto serão zeradas. Continuar?'))return;
+   if(hasGrid&&!hasStk(p)&&p.stock>0&&!sumOf(newStk)&&!confirm('Nenhuma opção está com estoque informado. As '+p.stock+' peças deste produto serão zeradas. Continuar?'))return;
    if(hasGrid)applyStk(p,newStk,'Ajuste no cadastro');
    Object.assign(p,d);{const L=curImgs();p.imgs=[...L];p.img=L[0]||''}}
   aedit=null;pform=false;newImg='';imgDraft=null;save();render();toast('Produto salvo.');return}
@@ -315,9 +316,9 @@ function delProd(id){if(confirm('Excluir produto?')){if(aedit===id)aedit=null;S.
 async function addMove(){
  const p=S.products.find(x=>x.id==$('#mp').value),q=parseInt($('#mq').value),t=$('#mt').value,z=$('#ms')?$('#ms').value:'',note=($('#mn').value||'').trim();
  if(!p||!q||q<1)return alert('Escolha produto e quantidade.');
- if(!ensureStk(p))return alert('Este produto ainda não tem o estoque dividido por tamanho. Abra ele em Produtos > Editar e informe quanto tem de cada tamanho.');
+ if(!ensureStk(p))return alert('Este produto ainda não tem o estoque dividido por opção. Abra ele em Produtos > Editar e informe quanto tem de cada opção.');
  const cur=stkQ(p,z),sale=t==='venda';
- if(t!=='entrada'&&q>cur)return alert((sale?'Venda':'Saída')+' maior que o estoque'+(z&&z!=='Único'?' do tamanho '+z:'')+' ('+cur+').');
+ if(t!=='entrada'&&q>cur)return alert((sale?'Venda':'Saída')+' maior que o estoque'+(z&&z!=='Único'?(isImpP(p)?' da opção ':' do tamanho ')+z:'')+' ('+cur+').');
  const area=isImpP(p)?'importados':'moda',when=()=>new Date().toLocaleString('pt-BR');
  if(sale){
   const v=parseFloat(String($('#mv').value).replace(',','.')),pay=$('#mpay').value,cli=($('#mcl').value||'').trim();
@@ -505,7 +506,7 @@ function vProduto(){
  if(!p)return `<section><div class="wrap"><h2>Produto não encontrado</h2><p class="sub">Esse link pode estar desatualizado.</p><button class="btn" onclick="go('loja')">Ver catálogo</button></div></section>`;
  const imp=p.type==='avulso';
  return `<section><div class="wrap"><p class="backrow"><button class="backbtn" onclick="go('loja')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Voltar ao catálogo</button></p>
- <div class="pdp"><div class="card">${gallery(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.kind,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${priceH(p)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
+ <div class="pdp"><div class="card">${gallery(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${colorMark(p)?colorMark(p)+' · ':''}${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.kind,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${priceH(p)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
  <label>${esc(optName(p))}</label><select id="sz${p.id}">${sizeOpts(p)}</select><label for="qty${p.id}">Quantidade desejada</label><input id="qty${p.id}" type="number" min="1" step="1" value="1" inputmode="numeric">${p.stock>0?lowTag(p):'<div class="stockout-note"><span class="stockout-dot"></span>Sem estoque no momento. Você pode solicitar pela lista de espera.</div>'}<div class="row"><button class="btn${p.stock>0?'':' waitlist-btn'}" onclick="addCart(${p.id},Math.max(1,parseInt(document.getElementById('qty${p.id}').value)||1))">${p.stock>0?'Adicionar ao carrinho':'Entrar na lista de espera'}</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div></div></div></div></section>`;
 }
 function updPrev(){const p=curShareProd(),e=$('#amsg');if(p&&e)e.innerHTML=fmtWA(shareMsg(p,asn.trim(),1))}
@@ -571,7 +572,7 @@ function vLoja(){
  <section id="cat"><div class="wrap"><h2>${SEC==='importados'?'Importados':'Catálogo'}</h2><p class="sub">${q?`Resultados para “${esc(q)}” <button class="btn sm ghost" onclick="q='';render()">Limpar busca</button>`:(SEC==='importados'?'Produtos importados selecionados.':'Moda feminina e masculina.')}</p>
  ${IMP?kindBar():`<div class="pills impf">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';kindF='';render()">${l}</button>`).join('')}</div>
  ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';kindF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];kindF='';render()">${esc(c)}</button>`).join('')}</div>`:''}`}
- ${list.length?`${IMP?`<p class="impcount">${list.length} ${list.length===1?'produto':'produtos'}</p>`:''}<div class="grid impgrid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><span class="cbadge">${esc(p.kind||(IMP?'Importado':p.gen)||'Moda')}</span><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${priceH(p)}</div>
+ ${list.length?`${IMP?`<p class="impcount">${list.length} ${list.length===1?'produto':'produtos'}</p>`:''}<div class="grid impgrid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><span class="cbadge">${esc(p.kind||(IMP?'Importado':p.gen)||'Moda')}</span><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${colorMark(p)?colorMark(p)+' · ':''}${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${priceH(p)}</div>
   ${p.stock>0?`<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${sizeOpts(p)}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${lowTag(p)}`:`<div class="stockout"><span class="stockout-label"><span class="stockout-dot"></span>Esgotado</span><button class="btn sm waitlist-btn" onclick="openProd(${p.id})">Entrar na lista de espera <span aria-hidden="true">→</span></button></div>`}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
  </div></section>
  ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid impgrid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
@@ -582,16 +583,16 @@ function vConta(){
  const os=S.orders.filter(o=>o.customer.email===c.email&&oArea(o)===(IMP?'importados':'moda'));
  return `<section><div class="wrap"><h2>Olá, ${esc(c.name)}</h2><p class="sub">${esc(c.email)} · <button class="btn sm ghost" onclick="custLogout()">Sair</button></p>
  ${justOrdered?vOk(justOrdered):''}<h3 style="margin:20px 0 8px">Meus pedidos</h3>${os.length?os.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id}</b><span class="st">${o.status}</span></div><div class="tag">${o.date}</div>${o.items.map(i=>`<div class="line"><span>${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}${o.coupon?`<div class="line"><span>Cupom ${esc(o.coupon.code)}</span><span>−${money(o.discount||0)}</span></div>`:''}<div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
- ${o.status==='Lista de espera'?'<p class="tag">Lista de espera: entraremos em contato quando a quantidade ou o tamanho estiver disponível.</p>':`${steps(o)}${trackBlock(o)}`}</div>`).join(''):'<div class="empty">Você ainda não fez pedidos.</div>'}</div></section>`;
+ ${o.status==='Lista de espera'?`<p class="tag">Lista de espera: entraremos em contato quando ${IMP?'a quantidade':'a quantidade ou o tamanho'} estiver disponível.</p>`:`${steps(o)}${trackBlock(o)}`}</div>`).join(''):'<div class="empty">Você ainda não fez pedidos.</div>'}</div></section>`;
 }
-function vOk(id){const o=S.orders.find(x=>x.id===id),wait=!!(o&&o.status==='Lista de espera');return `<div class="okbox"><span class="tag">${wait?'Solicitação registrada!':'Pedido realizado!'}</span><div class="okid">${esc(id)}</div><p>${wait?'Você entrou na lista de espera. Entraremos em contato quando houver a quantidade ou o tamanho desejado.':'Guarde esse número do pedido.'} ${IMP?'Você acompanha o status aqui em <b>Minha conta</b>.':'Com ele e o seu e-mail você acompanha tudo em <b>Rastrear pedido</b>.'} A Gabriely também recebe o número no WhatsApp.</p><div class="row"><button class="btn sm" onclick="copyOrderId(this,'${id}')">Copiar número</button>${IMP?'':`<button class="btn sm ghost" onclick="trackOrder('${id}')">Acompanhar pedido</button>`}</div></div>`}
+function vOk(id){const o=S.orders.find(x=>x.id===id),wait=!!(o&&o.status==='Lista de espera');return `<div class="okbox"><span class="tag">${wait?'Solicitação registrada!':'Pedido realizado!'}</span><div class="okid">${esc(id)}</div><p>${wait?`Você entrou na lista de espera. Entraremos em contato quando ${IMP?'houver disponibilidade':'houver a quantidade ou o tamanho desejado'}.`:'Guarde esse número do pedido.'} ${IMP?'Você acompanha o status aqui em <b>Minha conta</b>.':'Com ele e o seu e-mail você acompanha tudo em <b>Rastrear pedido</b>.'} A Gabriely também recebe o número no WhatsApp.</p><div class="row"><button class="btn sm" onclick="copyOrderId(this,'${id}')">Copiar número</button>${IMP?'':`<button class="btn sm ghost" onclick="trackOrder('${id}')">Acompanhar pedido</button>`}</div></div>`}
 function copyOrderId(b,id){const done=()=>{b.textContent='Copiado!'};try{navigator.clipboard.writeText(id).then(done,()=>prompt('Copie o número do pedido:',id))}catch(e){prompt('Copie o número do pedido:',id)}}
 function trackOrder(id){const o=S.orders.find(x=>x.id===id);trkPre=o?{id:o.id,em:o.customer.email}:null;trk=null;go('rastreio')}
 function custMsg(o){
  const n=String(o.customer.name||'').trim().split(' ')[0],h=`Olá, ${n}! Aqui é a ${OWNER}, da Bonely Store. `,site=/^https?:/.test(location.protocol||'')?location.origin:'',loc=!!(o.ship&&o.ship.local),code=String(o.tracking||'').trim();
  const imp=oArea(o)==='importados',web=imp?`Qualquer dúvida sobre o andamento, é só me chamar por aqui, citando o número do pedido (*${o.id}*).`:`No nosso site${site?' ('+site+')':''}: abra *Rastrear pedido* e informe o número do pedido (*${o.id}*) e o e-mail usado na compra.`;
  let t;
- if(o.status==='Lista de espera')t=`Anotei sua solicitação *${o.id}*. Ela está na lista de espera para a quantidade ou tamanho que você pediu. Assim que houver disponibilidade, entro em contato.`;
+ if(o.status==='Lista de espera')t=`Anotei sua solicitação *${o.id}*. Ela está na lista de espera para a quantidade${oArea(o)==='importados'?'':' ou tamanho'} que você pediu. Assim que houver disponibilidade, entro em contato.`;
  else if(o.status==='Aguardando pagamento')t=`Seu pedido *${o.id}* (${money(o.total)}) está aguardando o pagamento. Posso te ajudar a finalizar?`;
  else if(o.status==='Pago')t=`Recebemos o pagamento do seu pedido *${o.id}*. Obrigada! Já vamos separar as suas peças.`;
  else if(o.status==='Separando')t=`Seu pedido *${o.id}* está sendo separado e logo será ${loc?'entregue':'enviado'}.`;
@@ -831,13 +832,16 @@ function vPanelHead(){
 }
 /* ---- configuração do cadastro de produto (por painel) ---- */
 const FDEF={name:'Nome',price:'Preço (R$)',kind:'Tipo da peça',gen:'Público',coll:'Coleção',sizes:'Tamanhos',stock:'Estoque por tamanho',brand:'Marca',desc:'Descrição',specs:'Detalhes do produto',img:'Foto'};
-const FDEF_IMP={sizes:'Tamanhos/Sabores',stock:'Estoque por tamanho/sabor'};
+const FDEF_IMP={sizes:'Opções',stock:'Estoque por opção'};
 const fdef=k=>(aarea==='importados'&&FDEF_IMP[k])||FDEF[k];
-const SZ=()=>aarea==='importados'?{s:'Tamanho/Sabor',p:'Tamanhos/Sabores'}:{s:'Tamanho',p:'Tamanhos'};
+const SZ=()=>aarea==='importados'?{s:'Opção',p:'Opções'}:{s:'Tamanho',p:'Tamanhos'};
 const FREQ=['name','price','gen'];
-const DEF_OPT=()=>({name:'Tamanho',list:aarea==='importados'?[]:['PP','P','M','G','GG','Extra GG','Baby Look']});
-const optCfg=()=>{const o=cfgOf().opt||{},d=DEF_OPT();return {name:String(o.name||'').trim()||d.name,list:Array.isArray(o.list)?o.list:d.list}};
-const optName=p=>{const o=((S.cfg||{})[isImpP(p)?'importados':'moda']||{}).opt;return String(o&&o.name||'').trim()||'Tamanho'};
+const DEF_OPT=()=>({name:aarea==='importados'?'Opção':'Tamanho',list:aarea==='importados'?[]:['PP','P','M','G','GG','Extra GG','Baby Look']});
+const optCfg=()=>{const o=cfgOf().opt||{},d=DEF_OPT(),name=String(o.name||'').trim();return {name:aarea==='importados'&&/tamanho/i.test(name)?d.name:name||d.name,list:Array.isArray(o.list)?o.list:d.list}};
+const optName=p=>{const imp=isImpP(p),o=((S.cfg||{})[imp?'importados':'moda']||{}).opt,n=String(o&&o.name||'').trim();return imp&&/tamanho/i.test(n)?'Opção':n||(imp?'Opção':'Tamanho')};
+const colorEmoji=value=>{const c=String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();if(/vermelh|red|cereja|vinho|bordo/.test(c))return '🔴';if(/laranj|orange|coral/.test(c))return '🟠';if(/amarel|yellow|dourad|gold/.test(c))return '🟡';if(/verde|green|oliva|limao/.test(c))return '🟢';if(/azul|blue|marinh|turquesa|ciano/.test(c))return '🔵';if(/roxo|lilas|violet|purple/.test(c))return '🟣';if(/rosa|pink|magenta/.test(c))return '🩷';if(/preto|black/.test(c))return '⚫';if(/branco|white|prata|silver|cinza|gray|grey/.test(c))return '⚪';if(/marrom|brown|bege|caramelo|nude/.test(c))return '🟤';return c?'🎨':''};
+const colorMark=p=>p&&String(p.color||'').trim()?`${colorEmoji(p.color)} ${esc(p.color)}`:'';
+function colorPreview(input){const e=$('#pcolor-preview');if(e)e.textContent=colorMark({color:input.value})||'O emoji da cor aparece aqui.'}
 const parseOpts=t=>{const out=[];String(t||'').split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(!out.some(y=>y.toLowerCase()===x.toLowerCase()))out.push(x)});return out};
 function optEditMode(b){const g=$('#popts');if(!g)return;const on=g.classList.toggle('editing');b.textContent=on?'Concluir edição':'Editar opções'}
 function optSetList(list){S.cfg=S.cfg||{};const c=S.cfg[aarea]=S.cfg[aarea]||{f:{}};c.opt={name:(c.opt&&c.opt.name)||'',list}}
@@ -892,7 +896,7 @@ const kinds=()=>{const u=[...new Set(AP().map(p=>p.kind).filter(Boolean))];retur
 function stkHtml(sz,v){
  if(!sz.length)return '<p class="hint" id="pstt">Marque ao menos uma opção acima para informar o estoque de cada uma.</p>';
  const t=sz.reduce((a,x)=>a+(parseInt(v[x])||0),0);
- return `<div class="stkg">${sz.map(x=>`<label class="stkc"><span>${esc(x)}</span><input class="pqs" type="number" min="0" inputmode="numeric" data-s="${esc(x)}" value="${esc(x in v?v[x]:'')}" placeholder="0" oninput="stkTot()" aria-label="Estoque do tamanho ${esc(x)}"></label>`).join('')}</div><p class="hint" id="pstt">Estoque geral deste produto: ${t} peças</p>`;
+ return `<div class="stkg">${sz.map(x=>`<label class="stkc"><span>${esc(x)}</span><input class="pqs" type="number" min="0" inputmode="numeric" data-s="${esc(x)}" value="${esc(x in v?v[x]:'')}" placeholder="0" oninput="stkTot()" aria-label="Estoque ${aarea==='importados'?'da opção':'do tamanho'} ${esc(x)}"></label>`).join('')}</div><p class="hint" id="pstt">Estoque geral deste produto: ${t} peças</p>`;
 }
 function stkTot(){const t=[...document.querySelectorAll('.pqs')].reduce((a,e)=>a+(parseInt(e.value)||0),0),e=$('#pstt');if(e)e.textContent='Estoque geral deste produto: '+t+' peças'}
 function stkSizes(){
@@ -920,7 +924,7 @@ function applyStk(p,ns,note){
  p.stk=ns;stkSum(p);
 }
 function stkChips(p){
- if(!hasStk(p)){const l=szOf(p);return l.length===1?`<span class="szc">${esc(l[0])} · ${p.stock}</span>`:'<span class="szc low">sem divisão por tamanho</span>'}
+ if(!hasStk(p)){const l=szOf(p);return l.length===1?`<span class="szc">${esc(l[0])} · ${p.stock}</span>`:`<span class="szc low">${isImpP(p)?'estoque geral':'sem divisão por tamanho'}</span>`}
  return szOf(p).map(x=>{const q=stkQ(p,x);return `<span class="szc${q<=0?' out':q<=2?' low':''}">${esc(x)} · ${q}</span>`}).join('');
 }
 const mvOpts=p=>p?szOf(p).map(x=>`<option value="${esc(x)}">${esc(x)}${hasStk(p)||szOf(p).length===1?' ('+stkQ(p,x)+')':''}</option>`).join(''):'';
@@ -929,7 +933,7 @@ function mvSizes(){const p=S.products.find(x=>x.id==$('#mp').value),e=$('#ms');i
 const DEF_TPL=()=>aarea==='importados'?'Material: \nCor: \nDimensões: \nOrigem: ':'Tecido: \nCor: \nModelagem: \nComposição: \nCuidados: ';
 const cfgOf=()=>((S.cfg||{})[aarea])||{};
 const NOIMP=k=>aarea==='importados'&&(k==='kind'||k==='coll');
-const fc=k=>{const c=(cfgOf().f||{})[k]||{};return {l:String(c.l||'').trim()||fdef(k),on:FREQ.includes(k)||(!c.h&&!NOIMP(k))}};
+const fc=k=>{const c=(cfgOf().f||{})[k]||{},label=String(c.l||'').trim();return {l:aarea==='importados'&&/tamanho/i.test(label)?fdef(k):label||fdef(k),on:FREQ.includes(k)||(!c.h&&!NOIMP(k))}};
 const SPEC_TPL=()=>{const t=cfgOf().tpl;return typeof t==='string'?t:DEF_TPL()};
 const cleanSpecs=t=>String(t||'').split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!/^[^:]+:\s*$/.test(x)).join('\n');
 function toast(t){const e=document.createElement('div');e.className='toast';e.setAttribute('role','status');e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2400)}
@@ -941,7 +945,8 @@ function prodForm(ep){
  +(on('coll')?`<label>${L('coll')}</label><input id="pc" list="cl" placeholder="Ex.: Verão 26" value="${esc(ep?ep.coll:'')}"><datalist id="cl">${S.colls.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>`:'')
  +(on('sizes')?(()=>{const oc=optCfg(),cur=ep?parseOpts(ep.sizes).filter(x=>x.toLowerCase()!=='único'):[],all=[...oc.list,...cur.filter(x=>!oc.list.some(y=>y.toLowerCase()===x.toLowerCase()))],isOn=x=>cur.some(y=>y.toLowerCase()===x.toLowerCase());
   const labels=all.map(x=>`<label class="opt"><input type="checkbox" class="po" value="${esc(x)}" ${isOn(x)?'checked':''} onchange="stkGrid()"><span>${esc(x)}</span><button type="button" class="oed" onclick="optRename(this,event)" aria-label="Renomear ${esc(x)}" title="Renomear">✎</button><button type="button" class="odel" onclick="optDel(this,event)" aria-label="Excluir ${esc(x)} da lista" title="Excluir da lista">×</button></label>`).join('');
-  return `<label>${L('sizes')}</label><input id="pxo" placeholder="Digite e aperte Enter (ex.: M, 42, Morango)" aria-label="Adicionar opção" autocomplete="off" onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();optAdd()}" onchange="optAdd()"><div class="selrow" id="psel">${selChips(cur)}</div><details class="fold optl"><summary>Ver lista de ${L('sizes')} <span class="a-mut">(<span id="poptsn">${cur.length}</span> marcados)</span></summary><div class="foldb"><div class="chk" id="popts" role="group" aria-label="${L('sizes')}">${labels}</div>${all.length?'<div class="chkact"><button type="button" class="a-link" onclick="optAll(true)">Marcar todas</button><button type="button" class="a-link" onclick="optAll(false)">Limpar</button><button type="button" class="a-link" onclick="optEditMode(this)">Editar opções</button></div>':''}</div></details><p class="hint">Digite uma opção e aperte Enter: ela já aparece marcada e entra na lista. Para escolher entre as que já existem, abra "Ver lista". Marque pelo menos uma.</p>`})():'')
+  return `<label>${L('sizes')}</label><input id="pxo" placeholder="Digite uma opção e aperte Enter" aria-label="Adicionar opção" autocomplete="off" onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();optAdd()}" onchange="optAdd()"><div class="selrow" id="psel">${selChips(cur)}</div><details class="fold optl"><summary>Ver lista de ${L('sizes')} <span class="a-mut">(<span id="poptsn">${cur.length}</span> marcados)</span></summary><div class="foldb"><div class="chk" id="popts" role="group" aria-label="${L('sizes')}">${labels}</div>${all.length?'<div class="chkact"><button type="button" class="a-link" onclick="optAll(true)">Marcar todas</button><button type="button" class="a-link" onclick="optAll(false)">Limpar</button><button type="button" class="a-link" onclick="optEditMode(this)">Editar opções</button></div>':''}</div></details><p class="hint">Digite uma opção e aperte Enter: ela já aparece marcada e entra na lista. Para escolher entre as que já existem, abra "Ver lista". Marque pelo menos uma.</p>`})():'')
+ +(aarea==='moda'?`<label for="pcolor">Cor</label><div class="row"><input id="pcolor" value="${esc(ep?ep.color||'':'')}" placeholder="Ex.: Azul-marinho" oninput="colorPreview(this)"><span id="pcolor-preview" class="tag">${colorMark(ep)||'O emoji da cor aparece aqui.'}</span></div>`:'')
  +(on('stock')&&(!ep||(!hasStk(ep)&&ep.stock>0&&szOf(ep).length>1))?(()=>{const sz=ep&&parseOpts(ep.sizes).length?szOf(ep):[],v=ep?(hasStk(ep)?ep.stk:(sz.length===1?{[sz[0]]:ep.stock}:{})):{};
   return `<div id="pstkw" style="${sz.length?'':'display:none'}"><label>${L('stock')}</label><div id="pstk">${stkHtml(sz,v)}</div>${ep&&!hasStk(ep)&&ep.stock>0?`<p class="hint err">Este produto tem ${ep.stock} peças no total, ainda sem divisão. Marque as opções e distribua nos campos acima.</p>`:''}</div>`})():'')
  +(['brand','desc','specs'].some(on)?`<details class="fold more" ${ep&&(ep.brand||ep.desc||String(ep.specs||'').trim())?'open':''}><summary>Mais detalhes (marca, descrição...)</summary><div class="foldb">`:'')
@@ -957,7 +962,7 @@ function vConfig(){
  return `<div class="two"><div><h3>Campos do cadastro de produto</h3><p class="hint">Painel ${AREAS[aarea].name}. Escreva um novo nome para trocar o título do campo e desmarque "Mostrar" para esconder. Deixando em branco, vale o nome original.</p>
  ${keys.map(k=>{const req=FREQ.includes(k),cur=(c.f&&c.f[k]&&c.f[k].l)||'';return `<div class="cfr"><div class="cfl"><label for="cf-${k}">${esc(fdef(k))}</label><input id="cf-${k}" value="${esc(cur)}" placeholder="${esc(fdef(k))}" maxlength="40"></div>${req?'<span class="cfreq">Obrigatório</span>':`<label class="cfs"><input type="checkbox" id="cfs-${k}" ${fc(k).on?'checked':''}>Mostrar</label>`}</div>`}).join('')}
  <div class="row"><button class="btn" onclick="saveCfg()">Salvar configurações</button><button class="btn ghost" onclick="resetCfg()">Restaurar padrão</button></div></div>
- <div><h3>Opções do produto</h3><p class="hint">É a lista que aparece para marcar no cadastro, como tamanhos das roupas ou sabores.</p><label for="cf-optn">Nome da opção (aparece na loja)</label><input id="cf-optn" value="${esc((c.opt&&c.opt.name)||'')}" placeholder="Tamanho" maxlength="30"><label for="cf-optl">Lista de opções (uma por linha)</label><textarea id="cf-optl" rows="9" spellcheck="false" placeholder="Ex.: Chocolate&#10;Morango&#10;Baunilha">${esc(optCfg().list.join('\n'))}</textarea><p class="hint">Exemplos: PP, P, M, G, GG para roupas. Para importados, o nome pode ser "Sabor" e a lista os sabores.</p></div>
+ <div><h3>Opções do produto</h3><p class="hint">É a lista que aparece para marcar no cadastro${aarea==='importados'?' dos produtos importados.':' das roupas, como tamanhos.'}</p><label for="cf-optn">Nome da opção (aparece na loja)</label><input id="cf-optn" value="${esc(optCfg().name)}" placeholder="${esc(DEF_OPT().name)}" maxlength="30"><label for="cf-optl">Lista de opções (uma por linha)</label><textarea id="cf-optl" rows="9" spellcheck="false" placeholder="Ex.: ${aarea==='importados'?'Chocolate&#10;Morango&#10;Baunilha':'PP&#10;P&#10;M&#10;G&#10;GG'}">${esc(optCfg().list.join('\n'))}</textarea><p class="hint">${aarea==='importados'?'Você pode usar nomes como "Sabor" e cadastrar a lista de sabores.':'Exemplos: PP, P, M, G, GG para roupas.'}</p></div>
  <div><h3>Modelo do campo Detalhes</h3><p class="hint">Estas linhas já vêm escritas ao cadastrar um produto novo. Uma por linha: escreva só o nome (ex.: Gola) e o dois-pontos entra sozinho. Apague tudo para o campo vir em branco.</p><textarea id="cf-tpl" rows="10" spellcheck="false">${esc(typeof c.tpl==='string'?c.tpl:DEF_TPL())}</textarea><p class="hint">Cada linha preenchida aparece na página do produto, na loja.</p></div></div>`;
 }
 function saveCfg(){
