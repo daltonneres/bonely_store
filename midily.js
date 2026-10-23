@@ -322,7 +322,7 @@ function parseMoneyInput(t){
  if(s.includes(',')){s=s.replace(/\./g,'').replace(',','.')}else if((s.match(/\./g)||[]).length>1)s=s.replace(/\./g,'');
  const v=parseFloat(s);return Number.isFinite(v)?v:NaN;
 }
-function adminStep(txt,val){
+async function adminStep(txt,val){
  const a=M.c.adm||(M.c.adm={}),v=val||'',n=norm(txt);
  if(v==='adm:menu'||v==='adm:cancel'){M.step='admin';M.c.adm={};return adminMenu()}
  if(M.step==='admin_fin_kind'){
