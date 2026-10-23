@@ -160,19 +160,19 @@ function giveStk(p,q,s){
 function sizeOpts(p){
  let first=true;
  return szOf(p).map(x=>{const q=stkQ(p,x),out=hasStk(p)&&q<=0,sel=!out&&first;if(sel)first=false;
-  return `<option value="${esc(x)}"${out?' disabled':''}${sel?' selected':''}>${esc(x)}${hasStk(p)?(out?' (esgotado)':q<=3?' (restam '+q+')':''):''}</option>`}).join('');
+  return `<option value="${esc(x)}"${sel?' selected':''}>${esc(x)}${hasStk(p)?(out?' (esgotado)':q<=3?' (restam '+q+')':''):''}</option>`}).join('');
 }
 const lowTag=p=>!hasStk(p)&&p.stock<=3?`<div class="tag">Restam ${p.stock}</div>`:'';
 function stockOf(key,size){
  if(String(key).startsWith('c')){const c=item(key).combo;return Math.min(...c.items.map(i=>S.products.find(p=>p.id==i)?.stock??0))}
  const p=item(key).p;return size?stkQ(p,size):p.stock;
 }
-function addCart(key){
+function addCart(key,desired){
  const sel=$('#sz'+key),size=sel?sel.value:'';
  const ex=CART().find(i=>i.key==key&&i.size==size);
- const q=(ex?ex.qty:0)+1;
- if(q>stockOf(key,size)){alert('Sem estoque suficiente'+(size&&size!=='Único'?' no tamanho '+size:'')+'.');return}
- ex?ex.qty++:CART().push({key,size,qty:1});
+ const q=desired||((ex?ex.qty:0)+1),wait=q>stockOf(key,size);
+ if(wait&&!confirm(`Temos ${stockOf(key,size)} unidade(s) disponível(is)${size&&size!=='Único'?' no tamanho '+size:''}, mas você pediu ${q}. Quer registrar este item na lista de espera?`))return;
+ if(ex){ex.qty=q;ex.waitlist=wait}else CART().push({key,size,qty:q,...(wait?{waitlist:true}:{})});
  save();cartOpen=true;render();
 }
 const cartSub=()=>CART().reduce((a,i)=>a+item(i.key).price*i.qty,0);
@@ -216,10 +216,10 @@ async function _checkout(){
  }
  const seq=FBM?await FB.nextSeq().catch(()=>null):++S.seq;
  if(!seq)return alert('Não foi possível registrar o pedido agora. Tente de novo em instantes.');
- const o={id:'BN'+seq,date:new Date().toLocaleString('pt-BR'),ts:Date.now(),customer:{...c,cep:ship.local?'':ship.cep},items,subtotal:sub,ship:sh,total:Math.round((sub-disc+sh.price)*100)/100,discount:disc,...(cpo?{coupon:cpo}:{}),pay:$('#cpay').value,status:STATUS[0],tracking:'',stockDone:false,area:IMP?'importados':'moda'};
+ const waiting=CART().some(i=>i.waitlist),o={id:'BN'+seq,date:new Date().toLocaleString('pt-BR'),ts:Date.now(),customer:{...c,cep:ship.local?'':ship.cep},items,subtotal:sub,ship:sh,total:Math.round((sub-disc+sh.price)*100)/100,discount:disc,...(cpo?{coupon:cpo}:{}),pay:$('#cpay').value,status:waiting?'Lista de espera':STATUS[0],tracking:'',stockDone:false,area:IMP?'importados':'moda'};
  if(FBM){try{await FB.placeOrder(o,c)}catch(e){console.error(e);return alert('Não foi possível registrar o pedido agora. Tente de novo em instantes.')}}
  S.orders.unshift(o);saveCustomer(c);if(FBM&&S.customer)S.customer.orderIds=[...new Set([...(S.customer.orderIds||[]),o.id])];S[CK]=[];ship=null;cdraft={};cartOpen=false;cup=null;cupSave();cupMsg='';save();
- const wm=`Olá, ${OWNER}! O pedido *${o.id}* foi realizado.\n\nCliente: ${c.name}\n`+items.map(i=>`• ${i.qty}x ${i.name}${i.size?' ('+i.size+')':''} - ${money(i.price*i.qty)}`).join('\n')+`\n\n${sh.local?(retira?'*Retirada na loja*':'*'+sh.name+'*\nO valor da entrega é calculado na hora da entrega.'):'Frete '+sh.name+': '+money(sh.price)}\n${disc>0?'Desconto (cupom '+cpcode+'): -'+money(disc)+'\n':''}*Total: ${money(o.total)}*${sh.local?' (sem frete)':''}\nForma de pagamento: ${o.pay}\n\n${retira?'Retirada: combinar com a loja':'Entrega: '+c.addr+(o.customer.cep?' (CEP '+o.customer.cep+')':'')}`;
+ const wm=`Olá, ${OWNER}! O ${waiting?'pedido para lista de espera':'pedido'} *${o.id}* foi realizado.\n\nCliente: ${c.name}\n`+items.map(i=>`• ${i.qty}x ${i.name}${i.size?' ('+i.size+')':''} - ${money(i.price*i.qty)}${waiting?' (aguardando disponibilidade)':''}`).join('\n')+`\n\n${sh.local?(retira?'*Retirada na loja*':'*'+sh.name+'*\nO valor da entrega é calculado na hora da entrega.'):'Frete '+sh.name+': '+money(sh.price)}\n${disc>0?'Desconto (cupom '+cpcode+'): -'+money(disc)+'\n':''}*Total: ${money(o.total)}*${sh.local?' (sem frete)':''}\nForma de pagamento: ${o.pay}\n\n${retira?'Retirada: combinar com a loja':'Entrega: '+c.addr+(o.customer.cep?' (CEP '+o.customer.cep+')':'')}`;
  const txt=encodeURIComponent(wm);
  justOrdered=o.id;view='conta';render();scrollTo(0,0);
  window.open(`https://wa.me/${WA}?text=${txt}`,'_blank');
@@ -427,7 +427,7 @@ function vRastreio(){
  return `<section><div class="wrap" style="max-width:560px"><h2>Rastrear pedido</h2><p class="sub">Veja o andamento do seu pedido e o código de rastreio.</p>
  <label>Número do pedido</label><input id="ro" placeholder="Ex.: BN1001" value="${trkPre?esc(trkPre.id):''}"><label>E-mail usado na compra</label><input id="re" type="email" value="${trkPre?esc(trkPre.em):''}"><div class="row"><button class="btn" onclick="findOrder()">Consultar pedido</button></div>
  ${trk&&trk.err?'<p class="err">Pedido não encontrado. Confira o número e o e-mail.</p>':''}
- ${o?`<div class="card in" style="margin-top:20px;padding:16px"><div class="line"><b>${o.id}</b><span class="st">${o.status}</span></div>${steps(o)}${trackBlock(o)}</div>`:''}
+ ${o?`<div class="card in" style="margin-top:20px;padding:16px"><div class="line"><b>${o.id}</b><span class="st">${o.status}</span></div>${o.status==='Lista de espera'?'<p class="tag">Sua solicitação está na lista de espera. Entraremos em contato quando houver disponibilidade.</p>':`${steps(o)}${trackBlock(o)}`}</div>`:''}
  <h3 style="margin-top:34px">Já tem o código dos Correios?</h3><p class="tag">Digite o código e abrimos a consulta de entrega em outra aba. O trajeto da encomenda aparece no site dos Correios, não aqui.</p>
  <div class="row"><input id="rc" placeholder="Ex.: AA123456789BR" aria-label="Código de rastreio"><button class="btn ghost" onclick="const c=$('#rc').value.trim();if(c)window.open('https://www.melhorrastreio.com.br/rastreio/'+encodeURIComponent(c),'_blank')">Rastrear</button></div></div></section>`;
 }
@@ -506,7 +506,7 @@ function vProduto(){
  const imp=p.type==='avulso';
  return `<section><div class="wrap"><p class="backrow"><button class="backbtn" onclick="go('loja')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Voltar ao catálogo</button></p>
  <div class="pdp"><div class="card">${gallery(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.kind,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${priceH(p)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
- ${p.stock>0?`<label>${esc(optName(p))}</label><select id="sz${p.id}">${sizeOpts(p)}</select>${lowTag(p)}<div class="row"><button class="btn" onclick="addCart(${p.id})">Adicionar ao carrinho</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`:`<div class="tag err">Esgotado</div><div class="row"><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`}</div></div></div></section>`;
+ <label>${esc(optName(p))}</label><select id="sz${p.id}">${sizeOpts(p)}</select><label for="qty${p.id}">Quantidade desejada</label><input id="qty${p.id}" type="number" min="1" step="1" value="1" inputmode="numeric">${p.stock>0?lowTag(p):'<div class="stockout-note"><span class="stockout-dot"></span>Sem estoque no momento. Você pode solicitar pela lista de espera.</div>'}<div class="row"><button class="btn${p.stock>0?'':' waitlist-btn'}" onclick="addCart(${p.id},Math.max(1,parseInt(document.getElementById('qty${p.id}').value)||1))">${p.stock>0?'Adicionar ao carrinho':'Entrar na lista de espera'}</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div></div></div></div></section>`;
 }
 function updPrev(){const p=curShareProd(),e=$('#amsg');if(p&&e)e.innerHTML=fmtWA(shareMsg(p,asn.trim(),1))}
 function vShareAdmin(){
@@ -572,7 +572,7 @@ function vLoja(){
  ${IMP?kindBar():`<div class="pills impf">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';kindF='';render()">${l}</button>`).join('')}</div>
  ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';kindF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];kindF='';render()">${esc(c)}</button>`).join('')}</div>`:''}`}
  ${list.length?`${IMP?`<p class="impcount">${list.length} ${list.length===1?'produto':'produtos'}</p>`:''}<div class="grid impgrid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><span class="cbadge">${esc(p.kind||(IMP?'Importado':p.gen)||'Moda')}</span><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${priceH(p)}</div>
-  ${p.stock>0?`<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${sizeOpts(p)}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${lowTag(p)}`:'<div class="tag err">Esgotado</div>'}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
+  ${p.stock>0?`<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${sizeOpts(p)}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${lowTag(p)}`:`<div class="stockout"><span class="stockout-label"><span class="stockout-dot"></span>Esgotado</span><button class="btn sm waitlist-btn" onclick="openProd(${p.id})">Entrar na lista de espera <span aria-hidden="true">→</span></button></div>`}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
  </div></section>
  ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid impgrid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
 }
@@ -582,16 +582,17 @@ function vConta(){
  const os=S.orders.filter(o=>o.customer.email===c.email&&oArea(o)===(IMP?'importados':'moda'));
  return `<section><div class="wrap"><h2>Olá, ${esc(c.name)}</h2><p class="sub">${esc(c.email)} · <button class="btn sm ghost" onclick="custLogout()">Sair</button></p>
  ${justOrdered?vOk(justOrdered):''}<h3 style="margin:20px 0 8px">Meus pedidos</h3>${os.length?os.map(o=>`<div class="card in" style="margin-bottom:14px;padding:16px"><div class="line"><b>${o.id}</b><span class="st">${o.status}</span></div><div class="tag">${o.date}</div>${o.items.map(i=>`<div class="line"><span>${i.qty}x ${esc(i.name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}${o.coupon?`<div class="line"><span>Cupom ${esc(o.coupon.code)}</span><span>−${money(o.discount||0)}</span></div>`:''}<div class="line"><span>Frete ${esc(o.ship.name)}</span><span>${money(o.ship.price)}</span></div><div class="line total"><span>Total</span><span>${money(o.total)}</span></div>
- ${steps(o)}${trackBlock(o)}</div>`).join(''):'<div class="empty">Você ainda não fez pedidos.</div>'}</div></section>`;
+ ${o.status==='Lista de espera'?'<p class="tag">Lista de espera: entraremos em contato quando a quantidade ou o tamanho estiver disponível.</p>':`${steps(o)}${trackBlock(o)}`}</div>`).join(''):'<div class="empty">Você ainda não fez pedidos.</div>'}</div></section>`;
 }
-function vOk(id){return `<div class="okbox"><span class="tag">Pedido realizado!</span><div class="okid">${esc(id)}</div><p>Guarde esse número do pedido. ${IMP?'Você acompanha o status aqui em <b>Minha conta</b>.':'Com ele e o seu e-mail você acompanha tudo em <b>Rastrear pedido</b>.'} A Gabriely também recebe o número no WhatsApp.</p><div class="row"><button class="btn sm" onclick="copyOrderId(this,'${id}')">Copiar número</button>${IMP?'':`<button class="btn sm ghost" onclick="trackOrder('${id}')">Acompanhar pedido</button>`}</div></div>`}
+function vOk(id){const o=S.orders.find(x=>x.id===id),wait=!!(o&&o.status==='Lista de espera');return `<div class="okbox"><span class="tag">${wait?'Solicitação registrada!':'Pedido realizado!'}</span><div class="okid">${esc(id)}</div><p>${wait?'Você entrou na lista de espera. Entraremos em contato quando houver a quantidade ou o tamanho desejado.':'Guarde esse número do pedido.'} ${IMP?'Você acompanha o status aqui em <b>Minha conta</b>.':'Com ele e o seu e-mail você acompanha tudo em <b>Rastrear pedido</b>.'} A Gabriely também recebe o número no WhatsApp.</p><div class="row"><button class="btn sm" onclick="copyOrderId(this,'${id}')">Copiar número</button>${IMP?'':`<button class="btn sm ghost" onclick="trackOrder('${id}')">Acompanhar pedido</button>`}</div></div>`}
 function copyOrderId(b,id){const done=()=>{b.textContent='Copiado!'};try{navigator.clipboard.writeText(id).then(done,()=>prompt('Copie o número do pedido:',id))}catch(e){prompt('Copie o número do pedido:',id)}}
 function trackOrder(id){const o=S.orders.find(x=>x.id===id);trkPre=o?{id:o.id,em:o.customer.email}:null;trk=null;go('rastreio')}
 function custMsg(o){
  const n=String(o.customer.name||'').trim().split(' ')[0],h=`Olá, ${n}! Aqui é a ${OWNER}, da Bonely Store. `,site=/^https?:/.test(location.protocol||'')?location.origin:'',loc=!!(o.ship&&o.ship.local),code=String(o.tracking||'').trim();
  const imp=oArea(o)==='importados',web=imp?`Qualquer dúvida sobre o andamento, é só me chamar por aqui, citando o número do pedido (*${o.id}*).`:`No nosso site${site?' ('+site+')':''}: abra *Rastrear pedido* e informe o número do pedido (*${o.id}*) e o e-mail usado na compra.`;
  let t;
- if(o.status==='Aguardando pagamento')t=`Seu pedido *${o.id}* (${money(o.total)}) está aguardando o pagamento. Posso te ajudar a finalizar?`;
+ if(o.status==='Lista de espera')t=`Anotei sua solicitação *${o.id}*. Ela está na lista de espera para a quantidade ou tamanho que você pediu. Assim que houver disponibilidade, entro em contato.`;
+ else if(o.status==='Aguardando pagamento')t=`Seu pedido *${o.id}* (${money(o.total)}) está aguardando o pagamento. Posso te ajudar a finalizar?`;
  else if(o.status==='Pago')t=`Recebemos o pagamento do seu pedido *${o.id}*. Obrigada! Já vamos separar as suas peças.`;
  else if(o.status==='Separando')t=`Seu pedido *${o.id}* está sendo separado e logo será ${loc?'entregue':'enviado'}.`;
  else if(o.status==='Enviado'){
@@ -614,6 +615,7 @@ function setStatus(id,st){
  }
  _setStatus(id,st);
 }
+function releaseWaitlist(id){const o=S.orders.find(x=>x.id===id&&x.status==='Lista de espera');if(!o)return;_setStatus(id,STATUS[0]);atab='pedidos';ofil='Todos';render();toast('Pedido '+id+' movido para Pedidos. Confirme o pagamento quando estiver pronto.')}
 /* Excluir pedido: pede confirmação e a senha do painel */
 var delId=null,delErr='',delBusy=false;
 const delFocus=()=>setTimeout(()=>{const e=$('#dpw');e&&e.focus()},40);
@@ -658,7 +660,7 @@ function vAreaModal(){
  return `<div class="modal" ${aarea?`onclick="if(event.target===this){apick=false;render()}"`:''}><div class="apd" role="dialog" aria-modal="true" aria-labelledby="apt"><div class="aph"><span class="spark">✦ ✧ ✦</span><h2 id="apt">${aarea?'Trocar de painel':'Olá, '+OWNER}</h2><p class="sub">${aarea?'Escolha qual painel você quer ver.':'Qual painel você quer abrir?'}</p></div><div class="apg">${card('moda')}${card('importados')}</div><div class="apf">${aarea?'<button class="btn sm ghost" onclick="apick=false;render()">Cancelar</button>':'<button class="btn sm ghost" onclick="go(\'loja\')">Voltar para a loja</button>'}</div></div></div>`;
 }
 const PAID=['Pago','Separando','Enviado','Entregue'],MES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-const ATABS0=[['produtos','Produtos'],['estoque','Estoque'],['vendas','Vendas'],['extrato','Extrato'],['pedidos','Pedidos'],['combos','Combos'],['cupons','Cupons'],['compartilhados','Compartilhados'],['config','Configurações']];
+const ATABS0=[['produtos','Produtos'],['estoque','Estoque'],['vendas','Vendas'],['extrato','Extrato'],['pedidos','Pedidos'],['espera','Lista de espera'],['combos','Combos'],['cupons','Cupons'],['compartilhados','Compartilhados'],['config','Configurações']];
 const ATABS=()=>ATABS0.filter(([k])=>!(k==='combos'&&aarea==='importados'));
 /* Atalhos usados pela Midily no painel: abrem os formulários já existentes. */
 window.midPanelGo=function(dest){
@@ -1111,11 +1113,16 @@ function vAdmin(){
   ${vFinance(a,tot)}`;
  }
  if(atab==='pedidos'){
-  const cnt=st=>AO().filter(o=>o.status===st).length,k=aq.trim().toLowerCase();
-  const l=AO().filter(o=>(ofil==='Todos'||o.status===ofil)&&(!k||o.id.toLowerCase().includes(k)||o.customer.name.toLowerCase().includes(k)));
-  body=`<div class="pills">${['Todos',...STATUS].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?AO().length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
+  const regular=AO().filter(o=>o.status!=='Lista de espera'),cnt=st=>regular.filter(o=>o.status===st).length,k=aq.trim().toLowerCase();
+  const l=AO().filter(o=>o.status!=='Lista de espera'&&(ofil==='Todos'||o.status===ofil)&&(!k||o.id.toLowerCase().includes(k)||o.customer.name.toLowerCase().includes(k)));
+  body=`<div class="pills">${['Todos',...STATUS].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?regular.length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
   ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st" data-s="${o.status}">${o.status}</span></div><div class="ordm">${dlBadge(o)}${o.store?'<span class="ordk">Venda na loja</span>':''}<span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}${o.store?'':`<span>${esc(o.customer.addr)}${o.customer.cep?' · CEP '+esc(o.customer.cep):''}</span>`}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${i.size?' ('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>${o.store?'':'Frete '+esc(o.ship.name)+' '+money(o.ship.price)+' · '}Pagamento: ${esc(o.pay||'a combinar')}${o.coupon?' · Cupom '+esc(o.coupon.code)+' (−'+money(o.discount||0)+')':''}</small></div>
   <div class="row ordact">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select>${o.store||oArea(o)==='importados'?'':`<input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>`}${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
+ }
+ if(atab==='espera'){
+  const k=aq.trim().toLowerCase(),l=AO().filter(o=>o.status==='Lista de espera'&&(!k||o.id.toLowerCase().includes(k)||String(o.customer.name||'').toLowerCase().includes(k)));
+  body=`<p class="tag">Pedidos com quantidade ou tamanho indisponível. Quando houver reposição, avise a cliente e mova o pedido para Pedidos para confirmar o pagamento.</p>${aSearch('Buscar por número do pedido ou nome do cliente')}
+  ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st">Lista de espera</span></div><div class="ordm"><span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${i.size?' ('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>Sem baixa de estoque ou confirmação de pagamento.</small></div><div class="row ordact">${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm" onclick="releaseWaitlist('${o.id}')">Disponibilidade confirmada · mover para Pedidos</button><button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido na lista de espera.</div>'}`;
  }
  if(atab==='combos'){
   const l=AP().filter(p=>aMatch(p)||cbSel.includes(p.id));
@@ -1126,13 +1133,13 @@ function vAdmin(){
  if(atab==='config')body=vConfig();
  if(atab==='compartilhados')body=vShareAdmin();
  if(atab==='cupons')body=vCupons();
- return `<section><div class="wrap"><div class="tabs" style="margin-top:0">${ATABS().map(([k,l])=>`<button class="${atab===k?'on':''}" onclick="atab='${k}';aq='';aedit=null;pform=false;imgDraft=null;render()">${l}${k==='pedidos'&&pend?' ('+pend+')':''}</button>`).join('')}</div>${body}</div></section>
+ return `<section><div class="wrap"><div class="tabs" style="margin-top:0">${ATABS().map(([k,l])=>`<button class="${atab===k?'on':''}" onclick="atab='${k}';aq='';aedit=null;pform=false;imgDraft=null;render()">${l}${k==='pedidos'&&pend?' ('+pend+')':''}${k==='espera'&&AO().filter(o=>o.status==='Lista de espera').length?' ('+AO().filter(o=>o.status==='Lista de espera').length+')':''}</button>`).join('')}</div>${body}</div></section>
 `;
 }
 function vCart(){
  const c={...(S.customer||{}),...cdraft};const sh=ship&&ship.opts?ship.opts[ship.sel]:null;const retira=IMP&&ship&&ship.mode==='retirada';
  return `<div class="drawer ${cartOpen?'open':''}" role="dialog" aria-label="Carrinho"><div class="line" style="border:0"><h2 style="margin:0">Carrinho</h2><button class="btn sm ghost" onclick="cartOpen=false;render()">Fechar</button></div>
- ${CART().length?CART().map((i,n)=>`<div class="line"><span>${i.qty}x ${esc(item(i.key).name)} ${i.size?'('+esc(i.size)+')':''}</span><span>${money(item(i.key).price*i.qty)} <button class="btn sm ghost" onclick="rm(${n})" aria-label="Remover">×</button></span></div>`).join(''):'<div class="empty">Seu carrinho está vazio. Escolha uma peça no catálogo.</div>'}
+ ${CART().length?CART().map((i,n)=>`<div class="line"><span>${i.qty}x ${esc(item(i.key).name)} ${i.size?'('+esc(i.size)+')':''}${i.waitlist?' · Lista de espera':''}</span><span>${money(item(i.key).price*i.qty)} <button class="btn sm ghost" onclick="rm(${n})" aria-label="Remover">×</button></span></div>`).join(''):'<div class="empty">Seu carrinho está vazio. Escolha uma peça no catálogo.</div>'}
  ${CART().length?`${IMP?`<label>Como você quer receber?</label><select id="loc" onchange="setLocal(this.value)"><option value="">Escolha uma opção</option><option value="retirada" ${ship&&ship.mode==='retirada'?'selected':''}>Retirada na loja</option><optgroup label="Entrega na cidade">${CIDADES.map(x=>`<option ${ship&&!ship.other&&ship.city===x?'selected':''}>${x}</option>`).join('')}</optgroup><option value="__outra" ${ship&&ship.other?'selected':''}>Outra cidade</option></select>${ship&&ship.other?`<label for="oc">Nome da cidade</label><input id="oc" value="${esc(ship.city)}" placeholder="Ex.: Realeza" oninput="setCity(this.value)" autocomplete="off">`:''}<p class="tag">Entregamos na região. Em &ldquo;Outra cidade&rdquo; você informa o nome e a loja confirma pelo WhatsApp. O valor da entrega é calculado na hora da entrega.</p>`:`<label>CEP de entrega</label><div class="row" style="margin-top:0"><input id="cep" value="${esc(ship?.cep||'')}" placeholder="00000-000" inputmode="numeric"><button class="btn sm" onclick="doCep()">Calcular</button></div>
  ${ship&&ship.err?'<div class="err">CEP inválido.</div>':''}${ship&&ship.loading?'<div class="tag">Calculando…</div>':''}${ship&&ship.fail?'<div class="err">Não foi possível calcular o frete agora. Tente novamente.</div>':''}${ship&&ship.opts?ship.opts.map((o,n)=>`<label style="color:var(--tx);display:flex;gap:8px"><input type="radio" name="fr" style="width:auto" ${n===ship.sel?'checked':''} onchange="setShip(${n})"> ${o.name} · ${o.days} dias · ${money(o.price)}</label>`).join(''):''}
  `}
