@@ -406,6 +406,7 @@ function login(){
  saveCustomer(c);save();render();
 }
 function trackBlock(o){
+ if(oArea(o)==='importados')return '';
  if(!o.tracking)return '<p class="tag">O código de rastreio aparece aqui assim que o pedido for enviado.</p>';
  const c=encodeURIComponent(o.tracking);
  return `<p>Código de rastreio: <b>${esc(o.tracking)}</b></p><div class="row"><a class="btn sm" style="text-decoration:none" target="_blank" rel="noopener" href="https://www.melhorrastreio.com.br/rastreio/${c}">Rastrear agora</a><a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="https://rastreamento.correios.com.br/app/index.php">Site dos Correios</a></div>`;
@@ -595,13 +596,13 @@ function custMsg(o){
  else if(o.status==='Separando')t=`Seu pedido *${o.id}* está sendo separado e logo será ${loc?'entregue':'enviado'}.`;
  else if(o.status==='Enviado'){
   if(loc)t=`Seu pedido *${o.id}* saiu para entrega! Qualquer dúvida, é só me chamar por aqui.`;
-  else if(code&&imp)t=`Seu pedido *${o.id}* foi enviado!\n\nCódigo de rastreio: *${code}*\nAcompanhe em https://www.correios.com.br/rastreamento ou no app dos Correios.`;
+  else if(imp)t=`Seu pedido *${o.id}* foi enviado!`;
   else if(code)t=`Seu pedido *${o.id}* foi enviado!\n\nCódigo de rastreio: *${code}*\n\n*Como acompanhar:*\n1) ${web}\n2) Direto nos Correios: cole o código *${code}* em https://www.correios.com.br/rastreamento ou no app dos Correios.\n\nO rastreio pode levar algumas horas para aparecer depois da postagem.`;
   else t=`Seu pedido *${o.id}* foi enviado! Assim que o código de rastreio estiver disponível, eu te aviso.`}
  else if(o.status==='Entregue')t=`Seu pedido *${o.id}* consta como entregue. Deu tudo certo com as suas peças?`;
  else if(o.status==='Cancelado')t=`Seu pedido *${o.id}* foi cancelado. Qualquer dúvida, é só falar comigo.`;
  else t=`Sobre o seu pedido *${o.id}*.`;
- if(o.status==='Enviado'&&!loc&&code)return h+t;
+ if(o.status==='Enviado'&&!loc&&!imp&&code)return h+t;
  return h+t+`\n\n${imp?'':'*Para acompanhar:* '}${web}`}
 function custWa(o){let d=String(o.customer.phone||'').replace(/\D/g,'');if(d&&d.length<=11)d='55'+d;return 'https://wa.me/'+d+'?text='+encodeURIComponent(custMsg(o))}
 function orderProds(i){return String(i.key).startsWith('c')?(item(i.key)?item(i.key).combo.items.map(x=>S.products.find(p=>p.id==x)):[]):[S.products.find(p=>p.id==i.key)]}
@@ -1095,7 +1096,7 @@ function vAdmin(){
   const l=AO().filter(o=>(ofil==='Todos'||o.status===ofil)&&(!k||o.id.toLowerCase().includes(k)||o.customer.name.toLowerCase().includes(k)));
   body=`<div class="pills">${['Todos',...STATUS].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?AO().length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
   ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st" data-s="${o.status}">${o.status}</span></div><div class="ordm">${dlBadge(o)}${o.store?'<span class="ordk">Venda na loja</span>':''}<span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}${o.store?'':`<span>${esc(o.customer.addr)}${o.customer.cep?' · CEP '+esc(o.customer.cep):''}</span>`}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${i.size?' ('+esc(i.size)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>${o.store?'':'Frete '+esc(o.ship.name)+' '+money(o.ship.price)+' · '}Pagamento: ${esc(o.pay||'a combinar')}${o.coupon?' · Cupom '+esc(o.coupon.code)+' (−'+money(o.discount||0)+')':''}</small></div>
-  <div class="row ordact">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select>${o.store?'':`<input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>`}${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
+  <div class="row ordact">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select>${o.store||oArea(o)==='importados'?'':`<input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>`}${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
  }
  if(atab==='combos'){
   const l=AP().filter(p=>aMatch(p)||cbSel.includes(p.id));

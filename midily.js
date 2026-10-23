@@ -1,12 +1,12 @@
 /* Bonely Store | Midily, agente virtual de atendimento
    Carregar DEPOIS do app.js (usa S, FB, FBM, WA, OWNER, HOURS, money, esc, IMP, CIDADES, pageUrl, prodPath).
-   Fluxo: entende o assunto -> responde / consulta o pedido -> coleta o relato -> monta um resumo objetivo
+   Fluxo: pede o nome -> entende o assunto -> responde / consulta o pedido -> coleta o relato -> monta um resumo objetivo
    e entrega para a Gabriely pelo WhatsApp. Tudo roda no navegador (sem chave de IA exposta). */
 (function(){
 if(window.__midily)return;window.__midily=1;
 
-const SS='midily_v1';
-const M={msgs:[],step:'menu',c:{},typing:false,busy:false,fails:0,idFails:0};
+const SS='midily_v1'; /* chave antiga: só é limpa, a conversa NÃO é mais guardada */
+const M={msgs:[],step:'menu',c:{},typing:false,busy:false,fails:0,idFails:0,nameFails:0,gen:0,closed:true};
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const fmt=t=>esc(t).replace(/\*([^*\n]+)\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
@@ -14,8 +14,8 @@ const EMAIL_RE=/[^\s@]+@[^\s@]+\.[^\s@]+/;
 const dt=(ts,d)=>ts?new Date(ts).toLocaleDateString('pt-BR'):(d||'');
 
 /* ---------- base de conhecimento (alinhada às páginas de Privacidade e Cancelamento) ---------- */
-const SUBJ={order:'Consulta de pedido',cancel:'Cancelamento de pedido',arrep:'Desistência (direito de arrependimento)',defeito:'Troca por defeito',tamanho:'Troca por tamanho',reemb:'Reembolso',outro:'Outro assunto'};
-const MENU=[['Consultar meu pedido','order'],['Cancelar ou trocar','cx'],['Tirar uma dúvida','faq'],['Falar com a '+OWNER,'human']];
+const SUBJ={order:'Consulta de pedido',cancel:'Cancelamento de pedido',arrep:'Desistência (direito de arrependimento)',defeito:'Troca por defeito',tamanho:'Troca por tamanho',reemb:'Reembolso',compra:'Ajuda na compra (auxiliar de compra)',outro:'Outro assunto'};
+const MENU=[['Auxiliar de compra','shop'],['Consultar meu pedido','order'],['Cancelar ou trocar','cx'],['Tirar uma dúvida','faq'],['Falar com a '+OWNER,'human']];
 const FAQ=[
  {id:'frete',lbl:'Frete e entrega',k:/frete|prazo|entreg|envio|enviam|chega|correios|retirad|retirar|cep/,
   a:()=>IMP
@@ -35,9 +35,12 @@ const FAQ=[
 ];
 const POL=()=>[['Ler a Política de Cancelamento e Trocas',pageUrl('cancelamento')]];
 
-/* ---------- persistência leve (só nesta aba) ---------- */
-function persist(){try{sessionStorage.setItem(SS,JSON.stringify({msgs:M.msgs.slice(-60),step:M.step,c:M.c,fails:M.fails}))}catch(e){}}
-function restore(){try{const j=JSON.parse(sessionStorage.getItem(SS));if(j&&j.msgs&&j.msgs.length){M.msgs=j.msgs;M.step=j.step||'menu';M.c=j.c||{};M.fails=j.fails||0;return true}}catch(e){}return false}
+/* ---------- reinício: fechar o chat apaga a conversa ---------- */
+function reset(){
+ M.gen++;M.msgs=[];M.step='menu';M.c={};M.typing=false;M.busy=false;M.fails=0;M.idFails=0;M.nameFails=0;
+ try{sessionStorage.removeItem(SS)}catch(e){}
+ const b=document.getElementById('mid-b');if(b)b.innerHTML='';
+}
 
 /* ---------- interface ---------- */
 const ICO={
@@ -72,17 +75,20 @@ function msgHtml(m,last){
 }
 function paint(){
  const b=document.getElementById('mid-b');if(!b)return;
- const n=M.msgs.length-1;
+ const n=M.msgs.length-1,ip=document.getElementById('mid-i');if(ip)ip.placeholder=PH[M.step]||'Escreva sua mensagem';
  b.innerHTML=M.msgs.map((m,i)=>msgHtml(m,i===n)).join('')+(M.typing?'<div class="mm m"><span class="dots" aria-label="Midily está escrevendo"><i></i><i></i><i></i></span></div>':'');
  b.scrollTop=b.scrollHeight;
 }
+const PH={name0:'Digite o seu nome',name:'Digite o seu nome',shop_bud:'Digite um valor, ex.: 300',shop_qty:'Ex.: 2'};
 async function say(...parts){
- M.busy=true;
+ if(M.closed)return;
+ const g=M.gen;M.busy=true;
  for(const p0 of parts){
   const p=typeof p0==='string'?{t:p0}:p0;
   M.typing=true;paint();
   await wait(Math.min(850,320+String(p.t||'').length*6));
-  M.typing=false;M.msgs.push({f:'m',...p});paint();persist();
+  if(g!==M.gen||M.closed)return; /* a conversa foi fechada/reiniciada no meio da digitação */
+  M.typing=false;M.msgs.push({f:'m',...p});paint();
  }
  M.busy=false;
 }
@@ -90,17 +96,21 @@ async function say(...parts){
 /* ---------- abrir / fechar ---------- */
 window.midOpen=function(){
  const el=shell();el.hidden=false;document.body.classList.add('mid-open');
- if(!M.msgs.length&&!restore())greet();else paint();
- paint();
+ M.closed=false;
+ if(!M.msgs.length)greet();else paint();
  setTimeout(()=>{const i=document.getElementById('mid-i');if(i)i.focus()},50);
 };
-window.midClose=function(){const el=document.getElementById('midily');if(el)el.hidden=true;document.body.classList.remove('mid-open')};
+/* ao fechar, a conversa é encerrada e apagada: na próxima abertura começa do zero */
+window.midClose=function(){
+ const el=document.getElementById('midily');if(el)el.hidden=true;
+ document.body.classList.remove('mid-open');
+ M.closed=true;reset();
+};
 function greet(){
- const nm=(typeof S!=='undefined'&&S.customer&&S.customer.name)?String(S.customer.name).trim().split(' ')[0]:'';
- M.step='menu';M.c={};
- say('Oi'+(nm?', '+nm:'')+'! Eu sou a *Midily*, assistente virtual da Bonely Store.',
-  'Posso tirar dúvidas, consultar seu pedido e explicar cancelamentos e trocas. Se precisar, eu organizo tudo e passo um resumo para a '+OWNER+' resolver.',
-  {t:'Sobre o que você quer falar?',chips:MENU});
+ const full=(typeof S!=='undefined'&&S.customer&&S.customer.name)?clip(S.customer.name,60):'',f=full.split(' ')[0];
+ M.step='name0';M.c={};M.nameFails=0;
+ say('Olá! Eu sou a *Midily*, assistente virtual da Bonely Store.',
+  {t:'Para começar, como posso te chamar?',chips:f?[['Sou '+f,'name:'+full]]:undefined});
 }
 
 /* ---------- entrada do usuário ---------- */
@@ -131,6 +141,7 @@ function intent(t){
  if(/atendente|gabriely|humano|falar com (a )?(alguem|pessoa|dona|loja)|quero falar/.test(n))return 'human';
  if(/cancel|desist|arrepen|reembols|estorn|devol|trocar|troca\b|defeit|errad|nao serviu|nao coube|apertad|rasgad|manchad/.test(n))return 'cx';
  if(/meu pedido|minha compra|rastre|cade (o|meu)|status|chegou|encomenda|bn\s?-?\d{3,}/.test(n))return 'order';
+ if(SHOP_RE.test(n))return 'shop';
  return '';
 }
 function subOf(t){
@@ -169,8 +180,37 @@ async function route(txt,val){
  try{
   if(val)return await act(val);
   const n=norm(txt);
-  if(/^(menu|inicio|comecar|recomecar|reiniciar|voltar)\b/.test(n))return await act('menu');
+  if(M.step!=='name0'&&/^(menu|inicio|comecar|recomecar|reiniciar|voltar)\b/.test(n))return await act('menu');
+  if(/^shop_/.test(M.step)){const k=intent(txt);if(k==='human'||k==='cx'||k==='order')return await free(txt)}
   switch(M.step){
+   case 'name0':{
+    const nm=parseName(txt);
+    if(!nm){
+     M.nameFails++;if(!M.c.pending&&txt.length>=3)M.c.pending=txt;
+     return await say({t:'Antes de continuar, como posso te chamar? Pode ser só o primeiro nome.',chips:M.nameFails>=2?[['Continuar sem informar','name:']]:undefined});
+    }
+    return await setName(nm);
+   }
+   case 'shop_bud':{
+    const b=parseBudget(txt);
+    if(!b)return await say('Não consegui identificar o valor. Digite só o número, por exemplo 300 ou 1.200.');
+    return await act('bud:'+b);
+   }
+   case 'shop_for':{
+    const n=norm(txt);
+    const g=/\b(feminin\w*|mulher|ela|esposa|mae|namorada|filha|irma|amiga)\b/.test(n)?'Feminino':/\b(mascul\w*|homem|ele|marido|pai|namorado|filho|irmao|amigo)\b/.test(n)?'Masculino':/tanto|qualquer|unissex|indiferente|nao sei/.test(n)?'Tanto':'';
+    if(!g)return await say({t:'Me diga se é para o público feminino, masculino ou tanto faz.',chips:FOR_CHIPS});
+    return await act('for:'+g);
+   }
+   case 'shop_qty':{
+    const n=norm(txt),w={um:1,uma:1,dois:2,duas:2,tres:3,quatro:4},d=n.match(/\d+/);
+    let q=0;
+    if(d)q=Math.min(+d[0],4);
+    else{const k=Object.keys(w).find(x=>new RegExp('\\b'+x+'\\b').test(n));if(k)q=w[k]}
+    if(/maximo|o que couber|quanto couber|varias|muitas/.test(n))q='max';
+    if(!q)return await say({t:qWord()+' você quer levar? Pode escolher abaixo ou digitar um número.',chips:qtyChips()});
+    return await act('qty:'+q);
+   }
    case 'ord_id':{
     const id=parseId(txt,true);
     if(!id){M.idFails++;return await say(M.idFails>=2?{t:'Não consegui identificar o número. Ele fica no comprovante e começa com *BN*. Quer tentar de novo ou falar com a '+OWNER+'?',chips:[['Tentar de novo','retry'],['Continuar sem o pedido','skipord'],['Voltar ao início','menu']]}:'Não consegui identificar o número. Ele começa com *BN* seguido de números, por exemplo BN1001.')}
@@ -201,6 +241,7 @@ async function free(t){
  if(k==='human'){seed();return act('human')}
  if(k==='cx'){seed();const s=subOf(t);return s?act('cx:'+s):act('cx')}
  if(k==='order'){seed();const id=parseId(t);if(id){M.c.sub='order';M.c.id=id;return afterId()}return act('order')}
+ if(k==='shop'){M.c.shopPre=parseBudget(t);return act('shop')}
  const f=faqOf(t);if(f)return answerFaq(f);
  const p=prodAnswer(t);if(p){return say({...p,chips:[['Outra dúvida','faq'],['Falar com a '+OWNER,'human'],['Era só isso','bye']]})}
  M.fails++;
@@ -214,7 +255,15 @@ async function act(v){
   const keep={name:M.c.name,phone:M.c.phone};M.c={...keep};M.step='menu';M.fails=0;M.idFails=0;
   return say({t:v==='new'?'Claro! Sobre o que você quer falar?':'Tudo bem. Sobre o que você quer falar?',chips:MENU});
  }
- if(v==='bye'||v==='resolved'){M.step='menu';return say({t:'Que bom! Se precisar de mais alguma coisa, é só chamar. 💛',chips:MENU})}
+ if(v.startsWith('name:'))return setName(v.slice(5).trim());
+ if(v==='shop')return shopStart();
+ if(v.startsWith('bud:')){M.c.shop=M.c.shop||{};M.c.shop.bud=+v.slice(4);return (M.c.shop.keep&&M.c.shop.n)?shopResults():shopFor()}
+ if(v.startsWith('for:')){M.c.shop=M.c.shop||{};M.c.shop.gen=v.slice(4);return shopQty()}
+ if(v.startsWith('qty:')){M.c.shop=M.c.shop||{};const q=v.slice(4);M.c.shop.n=q==='max'?'max':+q;return shopResults()}
+ if(v==='shopbud'){const o=M.c.shop||{};M.c.shop={gen:o.gen,n:o.n,keep:1};return askBud(false)}
+ if(v==='shopagain'){M.c.shop={};return askBud(false)}
+ if(v==='shopgo')return shopGo();
+ if(v==='bye'||v==='resolved'){M.step='menu';return say({t:'Que bom'+vc()+'! Se precisar de mais alguma coisa, é só chamar. 💛',chips:MENU})}
  if(v==='order'){M.c.sub='order';return askOrder(false)}
  if(v==='retry')return askOrder(M.c.sub!=='order');
  if(v==='skipord'){M.c.skip=1;M.c.id='';M.c.order=null;return intake()}
@@ -240,6 +289,172 @@ function answerFaq(f){
  return say({t:f.a(),links:f.links?f.links():undefined,chips:[['Outra dúvida','faq'],['Consultar pedido','order'],['Falar com a '+OWNER,'human'],['Era só isso','bye']]});
 }
 
+/* ---------- nome do cliente ---------- */
+const firstName=()=>String(M.c.name||'').trim().split(/\s+/)[0]||'';
+const vc=()=>{const f=firstName();return f?', '+f:''};
+const PART=new Set(['da','de','do','das','dos','e']);
+function parseName(t){
+ const n=norm(t);
+ if(/[?\d@]/.test(t)||intent(t)||/^(quero|preciso|gostaria|queria|como|qual|quanto|onde|tem|voces|vcs|posso|cade|oi|ola)\b/.test(n)&&!/^(oi|ola)\b[\s,!.]+\S/.test(n))return '';
+ const s=String(t).replace(/^\s*(?:oi|ola|olá|bom dia|boa tarde|boa noite)(?=[\s,!.]|$)[\s,!.]*/i,'')
+  .replace(/^\s*(?:meu nome (?:e|é)|me chamo|eu sou|sou|aqui (?:e|é)|pode me chamar de|é)\s+(?:o |a )?/i,'')
+  .replace(/[^\p{L}\s'-]/gu,' ').replace(/\s+/g,' ').trim();
+ const w=s.split(' ').filter(Boolean);
+ if(!w.length||w.length>4||s.length<2||w.some(x=>x.length>20))return '';
+ return w.map((x,i)=>i&&PART.has(x.toLowerCase())?x.toLowerCase():x.charAt(0).toUpperCase()+x.slice(1).toLowerCase()).join(' ');
+}
+async function setName(nm){
+ const pend=M.c.pending;M.c.pending='';M.c.name=nm||'';M.nameFails=0;M.step='menu';
+ const hi=firstName()?'Prazer, *'+firstName()+'*!':'Tudo bem, vamos seguir assim.';
+ if(pend){await say(hi);return route(pend)}
+ return say(hi,'Posso te ajudar a *escolher produtos dentro do seu orçamento*, consultar seu pedido, explicar cancelamentos e trocas ou tirar dúvidas. Se precisar, organizo tudo e passo um resumo para a '+OWNER+' resolver.',
+  {t:'Sobre o que você quer falar?',chips:MENU});
+}
+
+/* ---------- auxiliar de compra: analisa o orçamento e indica as melhores opções ---------- */
+const SHOP_RE=/orcament|quanto (eu )?(posso|devo)|tenho (so |apenas )?(r\$ ?)?\d|ate r\$ ?\d|presente|me (indica|recomenda|sugere)|indicac|recomend|sugest|escolher|montar (um )?look|melhor (opcao|custo)|quero comprar|ajuda (pra|para|a) comprar/;
+const FOR_CHIPS=[['Feminino','for:Feminino'],['Masculino','for:Masculino'],['Tanto faz','for:Tanto']];
+const unit=()=>IMP?'itens':'peças';
+const qWord=()=>IMP?'Quantos itens':'Quantas peças';
+const un=k=>k===1?(IMP?'item':'peça'):unit();
+const qtyChips=()=>[['1 '+un(1),'qty:1'],['2 '+unit(),'qty:2'],['3 '+unit(),'qty:3'],['O máximo que couber','qty:max']];
+const onSale=p=>+p.oldPrice>+p.price;
+const tot=s=>s.reduce((a,p)=>a+ +p.price,0);
+const sigOf=s=>s.map(p=>p.id).sort().join(',');
+function sizesOf(p){
+ if(p.stk&&typeof p.stk==='object')return Object.keys(p.stk).filter(k=>+p.stk[k]>0).join(', ');
+ return p.sizes&&norm(p.sizes)!=='unico'?String(p.sizes):'';
+}
+const pLine=p=>{const st=Number(p.stock),z=sizesOf(p);
+ return '• '+p.name+(z?' ('+z+')':'')+': '+(onSale(p)?'*'+money(p.price)+'* (era '+money(p.oldPrice)+')':money(p.price))+(st>0&&st<=4?' · últimas unidades':'')};
+function parseBudget(t){
+ const s=norm(t).replace(/r\$\s*/g,'');
+ let m=s.match(/(\d+(?:[.,]\d+)?)\s*mil\b/);
+ if(m)return Math.round(parseFloat(m[1].replace(',','.'))*1000);
+ m=s.match(/(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?/);
+ if(!m)return 0;
+ const v=parseFloat(m[1].replace(/\./g,'')+(m[2]?'.'+m[2]:''));
+ return v>=10&&v<=100000?v:0;
+}
+/* produtos da vitrine em que o cliente está (moda ou importados), com estoque e público compatível */
+function shopPool(sh){
+ const P=(typeof S!=='undefined'&&S.products)||[];
+ return P.filter(p=>{
+  if(IMP!==(p.type==='avulso'))return false;
+  if(!(+p.price>0))return false;
+  const st=Number(p.stock);if(!isNaN(st)&&st<=0)return false;
+  if(!IMP&&sh&&sh.gen&&sh.gen!=='Tanto'){const g=p.gen||'Unissex';if(g!==sh.gen&&g!=='Unissex')return false}
+  return true;
+ });
+}
+/* melhor conjunto de n itens com total <= cap: A = maior aproveitamento, B = maior economia em promoção */
+function bestSets(L0,n,cap){
+ let L=L0.filter(p=>+p.price<=cap).sort((a,b)=>b.price-a.price);
+ if(L.length>30)L=[...L.slice(0,15),...L.slice(-15)];
+ let A=null,B=null;const cur=[];
+ const ev=t=>{
+  const sav=cur.reduce((a,p)=>a+(onSale(p)?p.oldPrice-p.price:0),0),vr=new Set(cur.map(p=>p.kind||p.coll||p.gen||p.name)).size;
+  const k={tot:Math.round(t*100),sav:Math.round(sav*100),vr};
+  if(!A||k.tot>A.k.tot||(k.tot===A.k.tot&&k.vr>A.k.vr))A={set:cur.slice(),k};
+  if(k.sav>0&&(!B||k.sav>B.k.sav||(k.sav===B.k.sav&&k.tot>B.k.tot)))B={set:cur.slice(),k};
+ };
+ const rec=(i,t)=>{
+  if(cur.length===n){ev(t);return}
+  for(let j=i;j<L.length;j++){const pr=+L[j].price;if(t+pr>cap+1e-9)continue;cur.push(L[j]);rec(j+1,t+pr);cur.pop()}
+ };
+ rec(0,0);return{A,B};
+}
+function maxCount(L,bud){
+ let t=0,c=0;
+ L.map(p=>+p.price).sort((a,b)=>a-b).forEach(v=>{if(c<4&&t+v<=bud+1e-9){t+=v;c++}});
+ return Math.max(1,c);
+}
+function comboOpt(sh,bud){
+ if(IMP)return null;
+ const P=S.products||[],out=[];
+ (S.combos||[]).forEach(c=>{
+  const its=(c.items||[]).map(id=>P.find(p=>p.id==id));
+  if(!its.length||its.some(p=>!p))return;
+  if(its.some(p=>{const st=Number(p.stock);return !isNaN(st)&&st<=0}))return;
+  if(sh.gen&&sh.gen!=='Tanto'&&its.some(p=>{const g=p.gen||'Unissex';return g!==sh.gen&&g!=='Unissex'}))return;
+  const sum=tot(its),pr=+c.price;
+  if(!(pr>0)||pr>bud||!(sum>pr))return;
+  out.push({c,its,sum,pr,sav:sum-pr});
+ });
+ return out.sort((a,b)=>b.sav-a.sav)[0]||null;
+}
+function budChips(){
+ const pr=shopPool({}).map(p=>+p.price).sort((a,b)=>a-b),lo=pr[0]||0;
+ let t=[100,150,200,300,500,800,1000].filter(v=>v>=lo).slice(0,4);
+ if(t.length<2)t=[lo,lo*2,lo*3].map(v=>Math.ceil(v/50)*50);
+ return t;
+}
+function askBud(first){
+ M.step='shop_bud';
+ return say({t:(first?'Vou analisar o catálogo disponível e indicar as melhores opções para o seu bolso. ':'')+'Quanto você pretende investir? Escolha abaixo ou digite um valor, por exemplo 300.',
+  chips:[...budChips().map(v=>['Até '+money(v).replace(/,00$/,''),'bud:'+v]),['Voltar ao início','menu']]});
+}
+async function shopStart(){
+ if(!shopPool({}).length)return say({t:'Não consegui acessar o catálogo por aqui agora. Você pode ver os produtos na loja, ou eu passo o seu pedido de ajuda para a '+OWNER+'.',
+  links:[['Abrir a loja',IMP?'/importados':'/']],chips:[['Falar com a '+OWNER,'human'],['Voltar ao início','menu']]});
+ const pre=M.c.shopPre;M.c.shopPre=0;M.c.shop={};
+ if(pre){await say('Anotei o seu orçamento: *'+money(pre)+'*.');M.c.shop.bud=pre;return shopFor()}
+ return askBud(true);
+}
+function shopFor(){
+ if(IMP)return shopQty();
+ M.step='shop_for';
+ return say({t:'Para quem é a compra?',chips:FOR_CHIPS});
+}
+function shopQty(){
+ M.step='shop_qty';
+ return say({t:qWord()+' você quer levar?',chips:qtyChips()});
+}
+async function shopResults(){
+ const sh=M.c.shop||{},bud=+sh.bud,L=shopPool(sh);
+ M.step='menu';
+ await say('Certo'+vc()+'! Vou analisar o catálogo disponível para o orçamento de *'+money(bud)+'*.');
+ if(!L.length)return say({t:'No momento não encontrei produtos disponíveis com esse filtro. A '+OWNER+' pode te ajudar a achar algo ideal.',chips:[['Refazer a busca','shopagain'],['Falar com a '+OWNER,'human'],['Voltar ao início','menu']]});
+ const fit=L.filter(p=>+p.price<=bud);
+ if(!fit.length){
+  const cheap=L.slice().sort((a,b)=>a.price-b.price).slice(0,2);
+  return say({t:'Com *'+money(bud)+'* ainda não encontrei uma opção disponível. A mais em conta é *'+cheap[0].name+'*, por '+money(cheap[0].price)+', ou seja, faltam *'+money(cheap[0].price-bud)+'*. O pagamento pode ser parcelado no cartão em até 12x.',
+   links:cheap.map(p=>['Ver '+p.name,prodPath(p)]),
+   chips:[['Mudar orçamento','shopbud'],['Falar com a '+OWNER,'human'],['Voltar ao início','menu']]});
+ }
+ const req=sh.n==='max'?maxCount(L,bud):(+sh.n||1);
+ let n=Math.max(1,Math.min(req,fit.length)),R=null;
+ for(;n>=1;n--){R=bestSets(L,n,bud);if(R.A)break}
+ const pr=fit.map(p=>+p.price),lo=Math.min(...pr),hi=Math.max(...pr);
+ let intro='Analisei *'+L.length+' produtos disponíveis*: *'+fit.length+'* cabem no seu orçamento, entre '+money(lo)+' e '+money(hi)+'.';
+ if(sh.n==='max')intro+=' Dá para levar até *'+n+' '+un(n)+'*.';
+ else if(n<req)intro+=' Com esse valor, o máximo que consigo montar é *'+n+' '+un(n)+'*.';
+ const opts=[],seen=new Set();
+ const add=(title,set,note)=>{const g=sigOf(set);if(seen.has(g))return;seen.add(g);opts.push({title,set,note})};
+ const left=set=>{const d=bud-tot(set);return d<0.5?'Aproveita praticamente todo o orçamento.':'Sobram '+money(d)+' do orçamento.'};
+ add('Melhor aproveitamento do orçamento',R.A.set,left(R.A.set));
+ if(R.B)add('Maior economia (peças em promoção)',R.B.set,'Você economiza '+money(R.B.k.sav/100)+' em relação ao preço original.');
+ const C=bestSets(L,n,bud*0.85).A;
+ if(C)add('Com folga para '+(IMP?'a entrega':'o frete'),C.set,'Sobram '+money(bud-tot(C.set))+' para '+(IMP?'a entrega':'o frete')+'.');
+ const parts=[intro];
+ opts.forEach((o,i)=>parts.push({t:'*Opção '+(i+1)+': '+o.title+'*\n'+o.set.map(pLine).join('\n')+'\n*Total: '+money(tot(o.set))+'*\n'+o.note,links:o.set.map(p=>['Ver '+p.name,prodPath(p)])}));
+ const cb=n>=2?comboOpt(sh,bud):null;
+ if(cb)parts.push({t:'*Combo da loja que cabe no orçamento: '+cb.c.name+'*\n'+cb.its.map(p=>'• '+p.name).join('\n')+'\nDe '+money(cb.sum)+' por *'+money(cb.pr)+'*, uma economia de *'+money(cb.sav)+'*.',links:cb.its.map(p=>['Ver '+p.name,prodPath(p)])});
+ sh.res=opts.map((o,i)=>'Opção '+(i+1)+': '+o.set.map(p=>p.name+' '+money(p.price)).join(' + ')+' (total '+money(tot(o.set))+')').join('; ')+(cb?'; Combo '+cb.c.name+' '+money(cb.pr):'');
+ parts.push({t:'Os valores não incluem '+(IMP?'a entrega, combinada na hora':'o frete, calculado pelo CEP no carrinho')+'. O pagamento pode ser no Pix ou no cartão em até 12x. Quer que eu passe essa seleção para a '+OWNER+' te ajudar a fechar?',
+  chips:[['Falar com a '+OWNER+' sobre essa compra','shopgo'],['Mudar orçamento','shopbud'],['Nova busca','shopagain'],['Voltar ao início','menu']]});
+ return say(...parts);
+}
+function shopGo(){
+ const c=M.c,sh=c.shop||{};
+ c.sub='compra';
+ c.story=clip('Orçamento '+money(sh.bud)+(sh.gen&&sh.gen!=='Tanto'?' · público '+sh.gen.toLowerCase():'')+' · '+(sh.n==='max'?'o máximo de '+unit():sh.n+' '+un(+sh.n))+'. Sugestões da Midily: '+(sh.res||'sem sugestões'),900);
+ c.told='Análise de orçamento com sugestões de produtos.';
+ c.todo='Ajudar a escolher tamanhos e finalizar a compra com as opções sugeridas.';
+ c.order=null;
+ return intake();
+}
+
 /* ---------- cancelamentos e trocas ---------- */
 const CX_INTRO={
  cancel:'Antes do pagamento, o pedido pode ser cancelado sem custo. Depois do pagamento, se ainda não foi enviado, o cancelamento é feito com reembolso integral.',
@@ -253,6 +468,7 @@ function cxIntro(){
 }
 function advice(sub,o){
  const st=o&&o.status,sent=st==='Enviado'||st==='Entregue';
+ if(sub==='compra')return{short:'Análise de orçamento com sugestões de produtos.',todo:'Ajudar a escolher tamanhos e finalizar a compra com as opções sugeridas.'};
  if(sub==='cancel'){
   if(!o)return{short:'Política de cancelamento informada.',todo:'Confirmar o pedido e o status para decidir o cancelamento.'};
   if(st==='Cancelado')return{tell:'Esse pedido já consta como *cancelado*.',short:'Pedido já consta como cancelado.',todo:'Conferir se o reembolso já foi feito.'};
@@ -320,6 +536,7 @@ function orderMsg(o){
  else if(s==='Separando')L.push('Estamos separando as suas peças para '+(o.local?'entrega':'envio')+'.');
  else if(s==='Enviado'){
   if(o.local)L.push('Seu pedido saiu para entrega.');
+  else if(window.SECTION==='importados')L.push('Seu pedido foi enviado. Qualquer dúvida sobre o andamento, é só chamar por aqui.');
   else if(o.tracking)L.push('Código de rastreio: *'+o.tracking+'*. Pode levar algumas horas para aparecer depois da postagem.');
   else L.push('Ainda não temos o código de rastreio. Ele aparece aqui assim que for informado.');
  }
@@ -375,7 +592,7 @@ function review(){
  if(!c.todo){const a=advice(c.sub||'outro',c.order);c.todo=a.todo||'Responder a dúvida do cliente.';c.told=c.told||a.short}
  M.step='done';
  const d=new Date(),open=d.getDay()!==0&&d.getHours()>=9&&d.getHours()<18; /* HOURS: Seg. à Sáb. 09h às 18h */
- return say('Pronto! Organizei tudo em um resumo objetivo para a '+OWNER+':',
+ return say('Pronto'+vc()+'! Organizei tudo em um resumo objetivo para a '+OWNER+':',
   {sum:buildSummary()},
   {t:open?'Estamos em horário de atendimento ('+HOURS+'). Toque em *Enviar para a '+OWNER+' no WhatsApp* e ela te responde por lá.':'Agora estamos fora do horário ('+HOURS+'). Envie o resumo pelo WhatsApp e a '+OWNER+' responde assim que voltar.',
    chips:[['Corrigir meu relato','editstory'],['Novo atendimento','new']]});
