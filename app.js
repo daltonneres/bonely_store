@@ -494,12 +494,13 @@ function adminShare(ch){
 }
 function vShare(){
  const p=S.products.find(x=>x.id==shareId);if(!p)return '';
- return `<div class="modal" onclick="if(event.target===this){modal='';render()}"><div role="dialog" aria-label="Compartilhar produto" style="width:min(460px,100%)"><h2>Compartilhar</h2><p class="sub">Envie esta peça para um amigo ou alguém da família.</p>
+ return `<div class="modal share-modal" onclick="if(event.target===this){modal='';render()}"><div class="share-dialog" role="dialog" aria-modal="true" aria-label="Compartilhar produto">
+ <div class="share-head"><span class="st">Bonely Store</span><button class="share-close" onclick="modal='';render()" aria-label="Fechar">×</button></div><h2>Compartilhar</h2><p class="sub">Envie esta peça para alguém especial.</p>
  ${pcard(p)}
- <label>Nome de quem vai receber (opcional)</label><input id="shn" placeholder="Ex.: Maria">
+ <label for="shn">Nome de quem vai receber <span>(opcional)</span></label><input id="shn" placeholder="Ex.: Maria">
  <div class="linkbox">${IC.share}<span>${esc(prodUrl(p).replace(/^https?:\/\//,''))}</span></div>
- <div class="row"><button class="btn" onclick="waShare()">Enviar pelo WhatsApp</button><button class="btn ghost" onclick="copyLink(this,${p.id})">Copiar link</button>${typeof navigator!=='undefined'&&navigator.share?`<button class="btn ghost" onclick="nativeShare()">Mais opções</button>`:''}</div>
- <div class="row"><button class="btn sm ghost" onclick="modal='';render()">Fechar</button></div></div></div>`;
+ <div class="share-actions"><button class="btn share-whatsapp" onclick="waShare()">${IC.share}Enviar pelo WhatsApp</button><button class="btn ghost" onclick="copyLink(this,${p.id})">Copiar link</button>${typeof navigator!=='undefined'&&navigator.share?`<button class="btn ghost share-native" onclick="nativeShare()">Mais opções</button>`:''}</div>
+ </div></div>`;
 }
 function specsHtml(p){const L=String(p.specs||'').split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!/^[^:]+:\s*$/.test(x));if(!L.length)return '';return `<ul class="pspec">${L.map(x=>{const i=x.indexOf(':');return i>0?`<li><span>${esc(x.slice(0,i).trim())}</span><b>${esc(x.slice(i+1).trim())}</b></li>`:`<li><b>${esc(x)}</b></li>`}).join('')}</ul>`}
 function vProduto(){
