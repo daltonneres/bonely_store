@@ -38,7 +38,7 @@ const save=()=>{
 const $=s=>document.querySelector(s);
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='',pid=null,shareId=null,asp=null,asn='',asw='',aq='',ofil='Todos',vper='14d',cbSel=[],cbName='',cbPrice='',newQ=[],cdraft={},kindF='',aarea=null,apick=false,aedit=null,justOrdered=null,trkPre=null;
+let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='',pid=null,shareId=null,asp=null,asn='',asw='',aq='',ofil='Todos',vper='14d',cbSel=[],cbName='',cbPrice='',newQ=[],cdraft={},kindF='',aarea=null,apick=false,aedit=null,justOrdered=null,trkPre=null,added=null;
 
 /* Camada de dados: com firebase.js carregado, a loja lê do Firestore e o painel grava nele (save() -> FB.queue). Sem ele, cai no localStorage (prévia). */
 
@@ -180,7 +180,39 @@ function addCart(key,desired){
  if(q>available&&product&&isImpP(product)){alert('Sem estoque suficiente'+(size&&size!=='Único'?' na opção '+size:'')+'.');return}
  if(wait&&!confirm(`Temos ${available} unidade(s) disponível(is)${size&&size!=='Único'?(product&&isImpP(product)?' na opção '+size:' no tamanho '+size):''}, mas você pediu ${q}. Quer registrar este item na lista de espera?`))return;
  if(ex){ex.qty=q;ex.waitlist=wait}else CART().push({key,size,color,qty:q,...(wait?{waitlist:true}:{})});
- save();cartOpen=false;render();toast('Adicionado ao carrinho. Continue escolhendo e finalize tudo de uma vez.');
+ save();cartOpen=false;
+ if(wait){render();toast('Item adicionado ao carrinho (lista de espera).');return}
+ const it=item(key);added={name:it.name,size,color,qty:q,n:CART().reduce((a,i)=>a+i.qty,0)};render();
+ setTimeout(()=>{const b=document.getElementById('addgo');if(b)b.focus()},30);
+}
+const ADDCSS=`.modal>.addd{width:min(400px,100%);max-width:400px;text-align:center;padding:34px clamp(22px,6vw,34px) 26px;border:1px solid rgba(201,162,95,.4);border-top:2px solid var(--gold);border-radius:18px;box-shadow:0 28px 80px rgba(0,0,0,.7);animation:apin .2s ease-out}
+.modal>.addd .addck{width:46px;height:46px;margin:0 auto 14px;border-radius:50%;border:1px solid var(--gold);color:var(--gold);display:grid;place-items:center;font-size:22px}
+.modal>.addd h2{font-size:clamp(24px,6.5vw,29px);line-height:1.15;margin:0 0 12px}
+.modal>.addd .addn{margin:0 0 6px;line-height:1.5}
+.modal>.addd .addbtns{display:grid;gap:12px;margin-top:24px}
+.modal>.addd .addbtns .btn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;min-height:50px;padding:13px 22px;border-radius:999px;font-size:14px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;line-height:1;cursor:pointer;transition:transform .15s ease,box-shadow .2s ease,background .2s ease,border-color .2s ease}
+.modal>.addd .addbtns .btn .ic{width:19px;height:19px;flex-shrink:0;display:block}
+.modal>.addd .addbtns .addgo{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#1a1409;border:0;box-shadow:0 10px 26px -10px rgba(201,162,95,.75)}
+.modal>.addd .addbtns .addgo i{font-style:normal;font-size:18px;line-height:1;transition:transform .2s ease}
+.modal>.addd .addbtns .addgo:hover{background:linear-gradient(135deg,#f0d6a3,var(--gold2));transform:translateY(-1px);box-shadow:0 14px 30px -10px rgba(230,200,143,.85)}
+.modal>.addd .addbtns .addgo:hover i{transform:translateX(4px)}
+.modal>.addd .addbtns .addmore{background:transparent;border:1px solid rgba(201,162,95,.45);color:var(--gold2)}
+.modal>.addd .addbtns .addmore:hover{background:rgba(201,162,95,.1);border-color:var(--gold)}
+.modal>.addd .addbtns .btn:active{transform:scale(.985)}
+.modal>.addd .addbtns .btn:focus-visible{outline:2px solid var(--gold2);outline-offset:3px}
+@media (prefers-reduced-motion:reduce){.modal>.addd,.modal>.addd .addbtns .btn,.modal>.addd .addbtns .addgo i{animation:none;transition:none}.modal>.addd .addbtns .btn:hover{transform:none}}`;
+(function(){if(document.getElementById('added-css'))return;const st=document.createElement('style');st.id='added-css';st.textContent=ADDCSS;document.head.appendChild(st)})();
+function addedClose(){added=null;render()}
+function addedGo(){added=null;cartOpen=true;render()}
+function vAdded(){
+ if(!added)return '';
+ const det=[added.size&&added.size!=='Único'?added.size:'',added.color||''].filter(Boolean).map(esc).join(' · ');
+ return `<div class="modal" onclick="if(event.target===this)addedClose()" onkeydown="if(event.key==='Escape')addedClose()"><div class="addd" role="dialog" aria-modal="true" aria-labelledby="addt">
+ <div class="addck" aria-hidden="true">✓</div>
+ <h2 id="addt">Produto adicionado ao carrinho</h2>
+ <p class="addn"><b>${esc(added.name)}</b>${det?'<br><span class="tag">'+det+'</span>':''}<br><span class="tag">Quantidade: ${added.qty}</span></p>
+ <p class="tag">Você tem ${added.n} ${added.n===1?'item':'itens'} no carrinho.</p>
+ <div class="addbtns"><button class="btn addgo" id="addgo" onclick="addedGo()">${IC.cart}<span>Ver carrinho e finalizar</span><i aria-hidden="true">→</i></button><button class="btn ghost addmore" onclick="addedClose()">Continuar comprando</button></div></div></div>`;
 }
 const cartSub=()=>CART().reduce((a,i)=>a+item(i.key).price*i.qty,0);
 function setShip(i){ship.sel=i;render()}
@@ -1278,7 +1310,7 @@ function render(){
  <button class="hbox central" onclick="midOpen()" aria-haspopup="dialog">${IC.head}<span><small>Central de</small>Atendimento</span></button>
  <button class="hbox" onclick="${acct()}">${IC.user}<span><small>${cu?'Olá, '+esc(cu.name.split(' ')[0]):'Olá, Bem-vindo(a)'}</small>${cu?'Minha conta':'Entre ou Cadastre-se'}</span></button>
  <button class="cartbtn" onclick="cartOpen=true;render()" aria-label="Carrinho, ${n} itens">${IC.cart}${n?`<b>${n}</b>`:''}</button></div></header>`}
- <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel&&adminOk&&aarea&&!apick?`<div class="fabs"><button class="fab chat" onclick="midOpen()" aria-label="Abrir Midily no painel" aria-haspopup="dialog">${IC.chat}<span class="fab-label">Midily</span></button></div>`:''}${panel?'':vFooter()}${vCart()}${vMenu()}${vPromo()}${modal==='frete'?vModal():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='lowstock'?vLowStock():''}${modal==='dueorder'?vDue():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><button class="fab chat" onclick="midOpen()" aria-label="Conversar com a Midily" aria-haspopup="dialog">${IC.chat}</button></div>`}`;
+ <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel&&adminOk&&aarea&&!apick?`<div class="fabs"><button class="fab chat" onclick="midOpen()" aria-label="Abrir Midily no painel" aria-haspopup="dialog">${IC.chat}<span class="fab-label">Midily</span></button></div>`:''}${panel?'':vFooter()}${vCart()}${vMenu()}${vPromo()}${modal==='frete'?vModal():''}${added?vAdded():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='lowstock'?vLowStock():''}${modal==='dueorder'?vDue():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><button class="fab chat" onclick="midOpen()" aria-label="Conversar com a Midily" aria-haspopup="dialog">${IC.chat}</button></div>`}`;
  if(panel&&adminOk&&!modal)setTimeout(checkNew,0);
  if(panel&&adminOk){const b=document.querySelector('.tabs button.on'),t=b&&b.parentElement;if(t)t.scrollLeft=b.offsetLeft-(t.clientWidth-b.offsetWidth)/2}
 }
