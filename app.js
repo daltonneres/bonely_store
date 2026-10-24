@@ -486,11 +486,11 @@ function match(p,nk){
 function cat(f,col){if(SEC==='importados'&&(f==='Feminino'||f==='Masculino'||col)){location.href=pageUrl('index')+'?'+new URLSearchParams({v:'loja',f:f,c:col||'',g:'cat'});return}
  clearUrl();pg='cat';filter=f;collF=col||'';kindF='';view='loja';cartOpen=false;menu=false;render();setTimeout(()=>{const e=document.getElementById('cat');if(e)e.scrollIntoView({behavior:'smooth'})},30)}
 function goto(id){pg=id;view='loja';cartOpen=false;menu=false;render();setTimeout(()=>{const e=document.getElementById(id);if(e)e.scrollIntoView({behavior:'smooth'})},30)}
-function doSearch(e){e.preventDefault();q=$('#q').value.trim();cat('tudo')}
+function doSearch(e){e.preventDefault();q=$('#q').value.trim();if(!IMP&&/^importados?$/i.test(q)){q='';location.href=pageUrl('importados');return}cat('tudo')}
 function vMenu(){
  const imp=SEC==='importados';
  return `<div class="scrim ${menu?'show':''}" onclick="menu=false;render()"></div><div class="drawer left ${menu?'open':''}" role="dialog" aria-label="Menu"><div class="line" style="border:0"><h2 style="margin:0">Menu</h2><button class="btn sm ghost" onclick="menu=false;render()">Fechar</button></div>
- ${imp?`<button class="mlk" onclick="q='';cat('tudo')">Todos os importados</button><a class="mlk" href="${pageUrl('index')}">Moda feminina e masculina</a>`:`<button class="mlk" onclick="q='';cat('tudo')">Todos os produtos</button><button class="mlk" onclick="q='';cat('Feminino')">Feminino</button><button class="mlk" onclick="q='';cat('Masculino')">Masculino</button><a class="mlk" href="${pageUrl('importados')}">Importados</a>`}
+ ${imp?`<button class="mlk" onclick="q='';cat('tudo')">Todos os importados</button><a class="mlk" href="${pageUrl('index')}">Moda feminina e masculina</a>`:`<button class="mlk" onclick="q='';cat('tudo')">Todos os produtos</button><button class="mlk" onclick="q='';cat('Feminino')">Feminino</button><button class="mlk" onclick="q='';cat('Masculino')">Masculino</button>`}
  ${!imp&&S.colls.length?'<h3 style="margin:18px 0 4px;color:var(--gold)">Coleções</h3>'+S.colls.map((c,i)=>`<button class="mlk" onclick="q='';cat('tudo',S.colls[${i}])">${esc(c)}</button>`).join(''):''}
  ${!imp&&S.combos.length?'<button class="mlk" onclick="goto(\'combos\')">Combos</button>':''}
  <h3 style="margin:18px 0 4px;color:var(--gold)">Sua conta</h3><button class="mlk" onclick="${acct()}">Minha conta</button>${IMP?'':`<button class="mlk" onclick="go('rastreio')">Rastrear pedido</button>`}${IMP?'':`<button class="mlk" onclick="menu=false;modal='frete';render()">Simular frete</button>`}</div>`;
@@ -601,14 +601,14 @@ const ph=p=>`<div class="ph">${p.img?`<img src="${p.img}" alt="${esc(p.name)}">`
 /* Views */
 function vCatsImp(){return `<nav class="cats" aria-label="Lojas"><div class="wrap"><button class="ctile imp" onclick="document.getElementById('cat').scrollIntoView({behavior:'smooth'})"><b>Importados</b><small>Você está aqui. Ver produtos</small><span class="ca" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg></span></button><a href="${pageUrl('index')}" class="ctile"><b>Moda</b><small>Feminino e masculino</small><span class="ca" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a></div></nav>`}
 function vCats(){const T=(k,t,s,h)=>`<${h?'a href="'+h+'"':'button onclick="'+k+'"'} class="ctile${h?' imp':''}"><b>${t}</b><small>${s}</small><span class="ca" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></${h?'a':'button'}>`;
- return `<nav class="cats" aria-label="Categorias"><div class="wrap">${T("q='';cat('Feminino')",'Feminino','Moda feminina')}${T("q='';cat('Masculino')",'Masculino','Moda masculina')}${S.combos.length?T("goto('combos')",'Combos','Leve junto, pague menos'):''}${T('','Importados','Entrega na região ou retirada',pageUrl('importados'))}</div></nav>`}
+ return `<nav class="cats" aria-label="Categorias"><div class="wrap">${T("q='';cat('Feminino')",'Feminino','Moda feminina')}${T("q='';cat('Masculino')",'Masculino','Moda masculina')}${S.combos.length?T("goto('combos')",'Combos','Leve junto, pague menos'):''}</div></nav>`}
 let KS=[];
 function kindBar(){const pool=S.products.filter(p=>match(p,1)),ks=[...new Set(pool.map(x=>x.kind).filter(Boolean))],sem=pool.some(x=>!x.kind);KS=ks;if(!ks.length)return '';
  return `<div class="pills impf"><button class="${!kindF?'on':''}" onclick="kindF='';render()">Todos</button>${ks.map((k,i)=>`<button class="${kindF===k?'on':''}" onclick="kindF=KS[${i}];render()">${esc(k)}</button>`).join('')}${sem?`<button class="${kindF==='__none'?'on':''}" onclick="kindF='__none';render()">Outros</button>`:''}</div>`}
 function vLoja(){
  const list=S.products.filter(p=>match(p));
  return `${SEC==='importados'?`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><h1 class="imp">IMPORTADOS</h1><p>Produtos importados selecionados pela Bonely Store, com entrega na região ou retirada.</p></div></section>`:`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><img class="herologo" src="${LOGO}" alt="Bonely Store"><p class="herorot" id="herorot" aria-live="off">Moda feminina, masculina e peças especiais, com envio para todo o Brasil.</p></div></section>`}
- ${SEC==='importados'?vCatsImp():vCats()}
+ ${SEC==='importados'?vCatsImp():''}
  <div class="benefits"><div class="wrap">${BEN.map(b=>`<div class="ben">${IC[b[0]]}<span><b>${b[1]}</b>${b[2]}</span></div>`).join('')}</div></div>
  <section id="cat"><div class="wrap"><h2>${SEC==='importados'?'Importados':'Catálogo'}</h2><p class="sub">${q?`Resultados para “${esc(q)}” <button class="btn sm ghost" onclick="q='';render()">Limpar busca</button>`:(SEC==='importados'?'Produtos importados selecionados.':'Moda feminina e masculina.')}</p>
  ${IMP?kindBar():`<div class="pills impf">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';kindF='';render()">${l}</button>`).join('')}</div>
@@ -1186,7 +1186,7 @@ function vAdmin(){
  if(atab==='produtos'){
   const l=AP().filter(aMatch),ep=aedit?S.products.find(x=>x.id==aedit):null,open=!!(ep||pform);
   body=`<div class="two"><div class="pform${open?' open':''}"><h3>${ep?'Editar produto':'Novo produto'}</h3>${prodForm(ep)}</div>
-  <div class="plistbox">${open?'':`<button class="btn mobnew" onclick="pform=true;render();scrollTo(0,0)">+ Novo produto</button>`}${aSearch('Buscar produto pelo nome')}<div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b><small>${[p.kind||(p.type==='avulso'?'Importado':''),p.coll,money(p.price)].filter(Boolean).map(esc).join(' · ')}</small><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=3?'err':''}">${p.stock}</b><small>em estoque</small></div><div class="pac"><button class="btn sm ghost" onclick="editProd(${p.id})">Editar</button><button class="btn sm ghost danger" onclick="delProd(${p.id})">Excluir</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}</div></div>`;
+  <div class="plistbox">${open?'':`<button class="btn mobnew" onclick="pform=true;render();window.scrollTo(0,0)">+ Novo produto</button>`}${aSearch('Buscar produto pelo nome')}<div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b><small>${[p.kind||(p.type==='avulso'?'Importado':''),p.coll,money(p.price)].filter(Boolean).map(esc).join(' · ')}</small><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=3?'err':''}">${p.stock}</b><small>em estoque</small></div><div class="pac"><button class="btn sm ghost" onclick="editProd(${p.id})">Editar</button><button class="btn sm ghost danger" onclick="delProd(${p.id})">Excluir</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}</div></div>`;
  }
  if(atab==='estoque'){
   const all=AP(),l=all.filter(aMatch),mp=all.find(p=>p.id==mvP)||l[0]||all[0],
@@ -1200,7 +1200,7 @@ function vAdmin(){
    <label>Observação (opcional)</label><input id="mn">
    <div class="row"><button class="btn" onclick="addMove()">Registrar</button></div></div></details>
   <h3 class="sec">Estoque por ${SZ().s.toLowerCase()}</h3>${aSearch('Buscar produto pelo nome')}
-  <div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=LOW?'err':''}">${p.stock}</b><small>total</small></div><div class="pac"><button class="btn sm ghost" onclick="mvP=${p.id};mvOpen=true;render();scrollTo(0,0)">Movimentar</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}
+  <div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=LOW?'err':''}">${p.stock}</b><small>total</small></div><div class="pac"><button class="btn sm ghost" onclick="mvP=${p.id};mvOpen=true;render();window.scrollTo(0,0)">Movimentar</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}
   <h3 class="sec">Histórico</h3>${AM().length?`<div class="mvl">${AM().slice(0,60).map(mvRow).join('')}</div>`:'<div class="empty">Nenhuma movimentação ainda.</div>'}`;
  }
  if(atab==='vendas'){
@@ -1287,7 +1287,7 @@ function vFooter(){
  return `<footer><div class="wrap">
  <div class="fgrid">
  <div><img class="flogo" src="${LOGO}" alt="Bonely Store" onclick="admTap()"><p class="fabout">Bem-vindo(a) à Bonely Store. ${IMP?'Produtos importados selecionados, com entrega em cidades da região ou retirada.':'Moda feminina e masculina com peças selecionadas e envio para todo o Brasil.'}</p></div>
- <div><h3>Categorias</h3><button class="lk" onclick="q='';cat('Feminino')">Feminino</button><button class="lk" onclick="q='';cat('Masculino')">Masculino</button><a class="lk" href="${pageUrl('importados')}">Importados</a></div>
+ <div><h3>Categorias</h3><button class="lk" onclick="q='';cat('Feminino')">Feminino</button><button class="lk" onclick="q='';cat('Masculino')">Masculino</button>${IMP?`<a class="lk" href="${pageUrl('importados')}">Importados</a>`:''}</div>
  <div><h3>Institucional</h3><a class="lk" href="${pageUrl('privacidade')}">Política de Privacidade</a><a class="lk" href="${pageUrl('cancelamento')}">Política de Cancelamento e Trocas</a></div>
  <div><h3>Minhas compras</h3><button class="lk" onclick="${acct()}">Minha conta</button>${IMP?'':`<button class="lk" onclick="go('rastreio')">Rastrear pedido</button>`}${IMP?'':`<button class="lk" onclick="modal='frete';render()">Simular frete</button>`}</div>
  <div><h3>Contato</h3><ul class="contact"><li><a href="https://wa.me/${WA}" target="_blank" rel="noopener">${IC.wa}<span>WhatsApp</span></a></li>${EMAIL?`<li><a href="mailto:${EMAIL}">${IC.mail}<span>${EMAIL}</span></a></li>`:''}</ul><div class="hours"><b>Horário de atendimento</b><p>${HOURS}</p></div></div>
@@ -1310,7 +1310,7 @@ function render(){
  <button class="hbox central" onclick="midOpen()" aria-haspopup="dialog">${IC.head}<span><small>Central de</small>Atendimento</span></button>
  <button class="hbox" onclick="${acct()}">${IC.user}<span><small>${cu?'Olá, '+esc(cu.name.split(' ')[0]):'Olá, Bem-vindo(a)'}</small>${cu?'Minha conta':'Entre ou Cadastre-se'}</span></button>
  <button class="cartbtn" onclick="cartOpen=true;render()" aria-label="Carrinho, ${n} itens">${IC.cart}${n?`<b>${n}</b>`:''}</button></div></header>`}
- <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel&&adminOk&&aarea&&!apick?`<div class="fabs"><button class="fab chat" onclick="midOpen()" aria-label="Abrir Midily no painel" aria-haspopup="dialog">${IC.chat}<span class="fab-label">Midily</span></button></div>`:''}${panel?'':vFooter()}${vCart()}${vMenu()}${vPromo()}${modal==='frete'?vModal():''}${added?vAdded():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='lowstock'?vLowStock():''}${modal==='dueorder'?vDue():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><button class="fab chat" onclick="midOpen()" aria-label="Conversar com a Midily" aria-haspopup="dialog">${IC.chat}</button></div>`}`;
+ <main>${view==='loja'?vLoja():view==='conta'?vConta():view==='rastreio'?vRastreio():view==='doc'?vDoc():view==='produto'?vProduto():vAdmin()}</main>${panel&&adminOk&&aarea&&!apick?`<div class="fabs"><button class="fab chat" onclick="midOpen()" aria-label="Abrir Midily no painel" aria-haspopup="dialog">${IC.chat}<span class="fab-label">Midily</span></button></div>`:''}${panel?'':vFooter()}${vCart()}${vMenu()}${vPromo()}${modal==='frete'?vModal():''}${added?vAdded():''}${modal==='login'?vLogin():''}${modal==='share'?vShare():''}${modal==='neworder'?vNewOrder():''}${modal==='lowstock'?vLowStock():''}${modal==='dueorder'?vDue():''}${modal==='delorder'?vDelOrder():''}${panel&&adminOk&&(!aarea||apick)?vAreaModal():''}${panel?'':`<div class="fabs"><button class="fab up" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="Voltar ao topo">${IC.up}</button><button class="fab chat" onclick="midOpen()" aria-label="Conversar com a Midily" aria-haspopup="dialog">${IC.chat}</button></div>`}`;
  if(panel&&adminOk&&!modal)setTimeout(checkNew,0);
  if(panel&&adminOk){const b=document.querySelector('.tabs button.on'),t=b&&b.parentElement;if(t)t.scrollLeft=b.offsetLeft-(t.clientWidth-b.offsetWidth)/2}
 }
@@ -1363,7 +1363,6 @@ boot();
   'Peças que combinam com o seu estilo.',
   'Novidades chegando toda semana.',
   'Leve junto, pague menos nos combos.',
-  'Importados selecionados com entrega na região.',
   'Seu próximo look está aqui.'
  ];
  let i=0;
