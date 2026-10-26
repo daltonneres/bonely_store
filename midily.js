@@ -769,7 +769,11 @@ async function doLookup(triedAccount){
 }
 function orderMsg(o){
  const L=['Encontrei o pedido *'+o.id+'*, feito em '+dt(o.ts,o.date)+', no valor de '+money(o.total)+'.','Status: *'+o.status+'*'],s=o.status;
- if(s==='Aguardando pagamento')L.push('Ainda não identificamos o pagamento. Assim que a '+OWNER+' confirmar, o status muda.');
+ if(s==='Aguardando pagamento'){
+  L.push('Ainda não identificamos o pagamento. Assim que a '+OWNER+' confirmar, o status muda.');
+  const px=(String(o.pay||'').toLowerCase()==='pix'&&typeof pixCfg==='function')?pixCfg():null;
+  if(px)L.push('\nPara pagar por *Pix*:\n'+(px.type||'Chave')+': *'+px.key+'*'+(px.holder?'\nTitular: '+px.holder:'')+'\n\nDepois de pagar, envie o comprovante pelo WhatsApp com o número do pedido.');
+ }
  else if(s==='Pago')L.push('Pagamento confirmado! Em breve as peças serão separadas.');
  else if(s==='Separando')L.push('Estamos separando as suas peças para '+(o.local?'entrega':'envio')+'.');
  else if(s==='Enviado'){
