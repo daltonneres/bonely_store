@@ -2,7 +2,7 @@
    Script comum (sem type=module). Carrega o SDK por import() e expõe window.FB.
    Carregar ANTES do app.js. Se algo falhar, FB.on fica false e o app avisa. */
 (function(){
-const ADMIN_EMAIL='bonelystore@gmail.com'; // único e-mail autorizado no painel (igual ao das regras)
+const ADMIN_EMAILS=['bonelystore@gmail.com','midily@bonelystore.com']; // e-mails autorizados (iguais aos das regras): painel + Midily
 const V='13.0.0',B='https://www.gstatic.com/firebasejs/'+V+'/';
 const cfg={
   apiKey:"AIzaSyD9bZsll8fK-2aNhwie6K_C7Ak6KYyC6Cw",
@@ -36,7 +36,7 @@ FB.ready=(async()=>{
     FB.on=true;
   }catch(e){console.warn('Firebase indisponível',e);FB.on=false}
 })();
-function setUser(u){FB.user=u||null;FB.admin=!!(u&&String(u.email||'').toLowerCase()===ADMIN_EMAIL)}
+function setUser(u){FB.user=u||null;FB.admin=!!(u&&ADMIN_EMAILS.includes(String(u.email||'').toLowerCase()))}
 
 /* ---------- vitrine (público) ---------- */
 FB.loadPublic=async()=>{
@@ -107,6 +107,8 @@ FB.confirmPw=async pw=>{
   await U.reauthenticateWithCredential(u,U.EmailAuthProvider.credential(u.email,String(pw||'')));
 };
 FB.logout=async()=>{try{await U.signOut(auth)}catch(e){}setUser(null);FB.loaded=false};
+/* token da sessão (a página /midily envia para o /api/midily provar que é a dona da loja) */
+FB.token=async()=>auth&&auth.currentUser?auth.currentUser.getIdToken():'';
 FB.loadAdmin=async S=>{
   const names=[...SYNC,'customers'];
   const [res,sp,sa,cn]=await Promise.all([
