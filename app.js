@@ -289,6 +289,7 @@ async function _checkout(){
 /* Admin */
 function _setStatus(id,st){
  const o=S.orders.find(x=>x.id===id);o.status=st;
+ if(o.fiado&&!o.fiado.paidAt&&PAID.includes(st)){o.fiado.paidAt=Date.now();o.paidTs=o.fiado.paidAt}
  if(st==='Pago'&&!o.stockDone){
   o.items.forEach(i=>{const ps=String(i.key).startsWith('c')?item(i.key)?.combo.items.map(x=>S.products.find(p=>p.id==x)):[S.products.find(p=>p.id==i.key)];
    (ps||[]).forEach(p=>{if(p){takeStk(p,i.qty,rs(i));S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:p.name,size:rs(i),type:'saida',qty:i.qty,note:'Pedido '+id,area:isImpP(p)?'importados':'moda'})}})});
@@ -385,16 +386,19 @@ async function addMove(){
  if(sale){
   const v=parseFloat(String($('#mv').value).replace(',','.')),pay=$('#mpay').value,cli=($('#mcl').value||'').trim();
   if(!(v>=0))return alert('Informe o valor de venda de cada peça.');
+  const fi=pay==='Fiado',due=fi?dueTs($('#mdue').value):0;
+  if(fi&&!cli)return alert('No fiado, informe o nome do cliente.');
+  if(fi&&!due)return alert('Informe a data combinada para o pagamento.');
   if(addMove.b)return;addMove.b=1;
   try{
    const seq=FBM?await FB.nextSeq().catch(()=>null):++S.seq;
    if(!seq)return alert('Não foi possível registrar a venda agora. Tente de novo em instantes.');
    const id='BN'+seq,sub=+(v*q).toFixed(2),ts=Date.now();
-   S.orders.unshift({id,date:when(),ts,customer:{name:cli||'Venda na loja',email:'',phone:'',addr:'Venda na loja',cep:''},items:[{key:p.id,name:p.name,price:v,qty:q,size:z}],subtotal:sub,ship:{name:'Venda na loja',price:0,local:true},total:sub,pay,status:'Entregue',tracking:'',stockDone:true,store:true,area});
+   S.orders.unshift({id,date:when(),ts,customer:{name:cli||'Venda na loja',email:'',phone:'',addr:'Venda na loja',cep:''},items:[{key:p.id,name:p.name,price:v,qty:q,size:z}],subtotal:sub,ship:{name:'Venda na loja',price:0,local:true},total:sub,pay,status:fi?'Fiado':'Entregue',...(fi?{fiado:{due,paidAt:0}}:{}),tracking:'',stockDone:true,store:true,area});
    S.seen=[...(S.seen||[]),id];
    takeStk(p,q,z);
    S.moves.unshift({date:when(),ts,name:p.name,size:z,type:'saida',qty:q,note:('Venda na loja '+id+(note?' · '+note:'')),area});
-   mvOpen=false;mvP=null;save();render();toast('Venda '+id+' registrada como Entregue.');
+   mvOpen=false;mvP=null;save();render();toast(fi?'Fiado '+id+' registrado. Vence em '+fDay(due)+'.':'Venda '+id+' registrada como Entregue.');
   }finally{addMove.b=0}
   return;
  }
@@ -685,7 +689,7 @@ var delId=null,delErr='',delBusy=false;
 const delFocus=()=>setTimeout(()=>{const e=$('#dpw');e&&e.focus()},40);
 function askDelOrder(id){delId=id;delErr='';delBusy=false;modal='delorder';render();delFocus()}
 function closeDel(){delId=null;delErr='';delBusy=false;modal='';render()}
-const delBack=o=>!!(o&&o.stockDone&&!o.sample&&['Pago','Separando'].includes(o.status));
+const delBack=o=>!!(o&&o.stockDone&&!o.sample&&['Pago','Separando','Fiado'].includes(o.status));
 function vDelOrder(){
  const o=S.orders.find(x=>x.id===delId);if(!o)return '';
  return `<div class="modal" onclick="if(event.target===this)closeDel()"><div role="alertdialog" aria-modal="true" aria-labelledby="dlt" style="width:min(460px,100%)"><form onsubmit="event.preventDefault();confirmDelOrder()" novalidate><span class="st" data-s="Cancelado">Ação sem volta</span><h2 id="dlt" style="margin-top:8px">Excluir o pedido ${esc(o.id)}?</h2>
@@ -742,7 +746,7 @@ window.midPanelGo=function(dest){
  return true;
 };
 const aMatch=p=>!aq||p.name.toLowerCase().includes(aq.trim().toLowerCase());
-function oTs(o){if(o.ts)return o.ts;const m=String(o.date).match(/(\d+)\/(\d+)\/(\d+)/);return m?new Date(+m[3],+m[2]-1,+m[1]).getTime():Date.now()}
+function oTs(o){if(o.paidTs)return o.paidTs;if(o.ts)return o.ts;const m=String(o.date).match(/(\d+)\/(\d+)\/(\d+)/);return m?new Date(+m[3],+m[2]-1,+m[1]).getTime():Date.now()}
 const paidOrders=()=>AO().filter(o=>PAID.includes(o.status));
 const sumT=a=>a.reduce((x,o)=>x+o.total,0);
 function monthRev(){const n=new Date(),a=new Date(n.getFullYear(),n.getMonth(),1).getTime();return sumT(paidOrders().filter(o=>oTs(o)>=a))}
@@ -788,10 +792,25 @@ function delExpense(id){
  S.expenses=(S.expenses||[]).filter(x=>x.id!==id);save();render();
 }
 function moreX(){xlim+=30;render()}
+
+/* ---- Fiado: a peça sai do estoque agora, a venda só conta como receita quando o pagamento é recebido ---- */
+const dayStart=t=>{const d=new Date(t);return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()};
+const dueTs=s=>{const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?new Date(+m[1],+m[2]-1,+m[3]).getTime():0};
+const dayVal=t=>{if(!t)return '';const d=new Date(t);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const fDay=t=>new Date(t).toLocaleDateString('pt-BR');
+function fiadoBadge(o){
+ if(o.status!=='Fiado'||!o.fiado)return '';
+ const d=Math.round((o.fiado.due-dayStart(Date.now()))/864e5),dt=fDay(o.fiado.due),pl=n=>n+' dia'+(n===1?'':'s');
+ return d<0?`<span class="dl late">Fiado atrasado há ${pl(-d)} · era ${dt}</span>`:d===0?`<span class="dl warn">Fiado vence hoje</span>`:`<span class="dl${d<=2?' warn':''}">Fiado: paga em ${dt} (${pl(d)})</span>`;
+}
+const fiadoAct=o=>o.status!=='Fiado'?'':`<select id="fm${o.id}" aria-label="Forma de recebimento">${['Pix','Dinheiro','Cartão de crédito','Cartão de débito'].map(x=>`<option>${x}</option>`).join('')}</select><button class="btn sm" onclick="receiveFiado('${o.id}')">Receber pagamento</button><input type="date" id="fd${o.id}" value="${dayVal(o.fiado&&o.fiado.due)}" aria-label="Nova data combinada"><button class="btn sm ghost" onclick="setFiadoDue('${o.id}')">Mudar data</button>`;
+function receiveFiado(id){const o=S.orders.find(x=>x.id===id);if(!o||o.status!=='Fiado')return;o.pay=($('#fm'+id)||{}).value||'Pix';_setStatus(id,'Entregue');toast('Fiado '+id+' recebido: '+money(o.total)+'.')}
+function setFiadoDue(id){const o=S.orders.find(x=>x.id===id);if(!o||!o.fiado)return;const t=dueTs(($('#fd'+id)||{}).value);if(!t)return alert('Escolha a data combinada.');o.fiado.due=t;save();render();toast('Nova data salva para '+id+'.')}
+function fiadoToggle(){const f=($('#mpay')||{}).value==='Fiado',b=$('#mfi'),l=$('#mcll');if(b)b.style.display=f?'':'none';if(l)l.textContent=f?'Cliente (obrigatório no fiado)':'Cliente (opcional)'}
 /* extrato corrido: receitas (pedidos pagos) e despesas em ordem de data, com saldo acumulado */
 function ledger(){
  const rows=[];
- paidOrders().forEach(o=>rows.push({ts:oTs(o),kind:'in',desc:(o.store?'Venda na loja ':'Pedido ')+o.id+(o.customer&&o.customer.name&&!o.store?' · '+o.customer.name:''),val:o.total}));
+ paidOrders().forEach(o=>rows.push({ts:oTs(o),kind:'in',desc:(o.store?(o.fiado?'Fiado recebido ':'Venda na loja '):'Pedido ')+o.id+(o.customer&&o.customer.name&&(!o.store||o.fiado)?' · '+o.customer.name:''),val:o.total}));
  AE().forEach(x=>rows.push({ts:x.ts||0,kind:x.kind==='in'?'in':'out',id:x.id,desc:x.desc,cat:x.cat,val:+x.val||0}));
  rows.sort((a,b)=>a.ts-b.ts);
  let bal=0;rows.forEach(r=>{bal+=r.kind==='in'?r.val:-r.val;r.bal=bal});
@@ -1219,7 +1238,7 @@ function vAdmin(){
    <label>Produto</label><select id="mp" onchange="mvP=this.value;mvSizes();mvType()">${all.map(p=>`<option value="${p.id}" ${mp&&p.id==mp.id?'selected':''}>${esc(p.name)} (${p.stock})</option>`).join('')}</select>
    <label>${SZ().s}</label><select id="ms">${mvOpts(mp)}</select>
    <div class="fg2"><div><label>Movimento</label><select id="mt" onchange="mvType()"><option value="entrada">Entrada (chegou peça)</option><option value="venda">Venda fora do site (entra como venda)</option><option value="saida">Perda ou ajuste (só baixa o estoque)</option></select></div><div><label>Quantidade</label><input id="mq" type="number" min="1" inputmode="numeric"></div></div>
-   <div id="msale" style="display:none"><div class="fg2"><div><label>Valor de cada peça (R$)</label><input id="mv" type="number" step="0.01" min="0" inputmode="decimal" value="${mp?mp.price:''}"></div><div><label>Forma de pagamento</label><select id="mpay"><option>Pix</option><option>Dinheiro</option><option>Cartão de crédito</option><option>Cartão de débito</option></select></div></div><label>Cliente (opcional)</label><input id="mcl" placeholder="Nome de quem comprou"><p class="tag">A venda entra como Entregue, no faturamento, nos mais vendidos e na meta.</p></div>
+   <div id="msale" style="display:none"><div class="fg2"><div><label>Valor de cada peça (R$)</label><input id="mv" type="number" step="0.01" min="0" inputmode="decimal" value="${mp?mp.price:''}"></div><div><label>Forma de pagamento</label><select id="mpay" onchange="fiadoToggle()"><option>Pix</option><option>Dinheiro</option><option>Cartão de crédito</option><option>Cartão de débito</option><option value="Fiado">Fiado (pagar depois)</option></select></div></div><label id="mcll">Cliente (opcional)</label><input id="mcl" placeholder="Nome de quem comprou"><div id="mfi" style="display:none"><label>Data combinada para pagar</label><input id="mdue" type="date"><p class="tag">A peça sai do estoque agora, mas a venda só entra no faturamento, no extrato e na meta quando você marcar como recebido.</p></div><p class="tag">Nos outros pagamentos, a venda entra como Entregue, no faturamento, nos mais vendidos e na meta.</p></div>
    <label>Observação (opcional)</label><input id="mn">
    <div class="row"><button class="btn" onclick="addMove()">Registrar</button></div></div></details>
   <h3 class="sec">Estoque por ${SZ().s.toLowerCase()}</h3>${aSearch('Buscar produto pelo nome')}
@@ -1227,11 +1246,11 @@ function vAdmin(){
   <h3 class="sec">Histórico</h3>${AM().length?`<div class="mvl">${AM().slice(0,60).map(mvRow).join('')}</div>`:'<div class="empty">Nenhuma movimentação ainda.</div>'}`;
  }
  if(atab==='vendas'){
-  const a=rangeStart(vper),inR=paidOrders().filter(o=>oTs(o)>=a),tot=sumT(inR),wait=AO().filter(o=>o.status===STATUS[0]),gi=goalInfo();
+  const a=rangeStart(vper),inR=paidOrders().filter(o=>oTs(o)>=a),tot=sumT(inR),wait=AO().filter(o=>o.status===STATUS[0]),fi=AO().filter(o=>o.status==='Fiado'),gi=goalInfo();
   const cnt={};inR.forEach(o=>o.items.forEach(i=>{cnt[i.name]=(cnt[i.name]||0)+i.qty}));
   const top=Object.entries(cnt).sort((x,y)=>y[1]-x[1]).slice(0,6).map(([l,v])=>({l,v}));
   body=`<div class="tabs"><button class="${vper==='7d'?'on':''}" onclick="setPer('7d')">Últimos 7 dias</button><button class="${vper==='14d'?'on':''}" onclick="setPer('14d')">Últimos 14 dias</button><button class="${vper==='30d'?'on':''}" onclick="setPer('30d')">Últimos 30 dias</button><button class="${vper==='6m'?'on':''}" onclick="setPer('6m')">Últimos 6 meses</button></div>
-  <div class="tiles">${tile('Faturamento',money(tot))}${tile('Pedidos pagos',inR.length)}${tile('Ticket médio',money(inR.length?tot/inR.length:0))}${tile('Aguardando pagamento',wait.length+' ('+money(sumT(wait))+')')}</div>
+  <div class="tiles">${tile('Faturamento',money(tot))}${tile('Pedidos pagos',inR.length)}${tile('Ticket médio',money(inR.length?tot/inR.length:0))}${tile('Aguardando pagamento',wait.length+' ('+money(sumT(wait))+')')}${fi.length?tile('Fiado a receber',fi.length+' ('+money(sumT(fi))+')'):''}</div>
   <h3>Vendas por ${DAYS[vper]?'dia':'mês'}</h3>${tot?bars(series(vper)):'<div class="empty">Ainda não há vendas pagas neste período.</div>'}
   <div class="two"><div><h3>Produtos mais vendidos</h3>${hbars(top,v=>v+' un.')}</div>
   <div><h3>Meta de vendas do mês</h3><label>Meta em reais</label><div class="row" style="margin-top:0"><input id="goal" type="number" min="0" step="50" value="${goalVal()||''}" placeholder="Ex.: 5000"><button class="btn" onclick="saveGoal()">Salvar meta</button></div>
@@ -1245,9 +1264,9 @@ function vAdmin(){
  if(atab==='pedidos'){
   const regular=AO().filter(o=>o.status!=='Lista de espera'),cnt=st=>regular.filter(o=>o.status===st).length,k=aq.trim().toLowerCase();
   const l=AO().filter(o=>o.status!=='Lista de espera'&&(ofil==='Todos'||o.status===ofil)&&(!k||o.id.toLowerCase().includes(k)||o.customer.name.toLowerCase().includes(k)));
-  body=`<div class="pills">${['Todos',...STATUS].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?regular.length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
-  ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st" data-s="${o.status}">${o.status}</span></div><div class="ordm">${dlBadge(o)}${o.store?'<span class="ordk">Venda na loja</span>':''}<span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}${o.store?'':`<span>${esc(o.customer.addr)}${o.customer.cep?' · CEP '+esc(o.customer.cep):''}</span>`}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${variantText(i)?' ('+variantText(i)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>${o.store?'':'Frete '+esc(o.ship.name)+' '+money(o.ship.price)+' · '}Pagamento: ${esc(o.pay||'a combinar')}${o.coupon?' · Cupom '+esc(o.coupon.code)+' (−'+money(o.discount||0)+')':''}</small></div>
-  <div class="row ordact">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${STATUS.map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select>${o.store||oArea(o)==='importados'?'':`<input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>`}${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
+  body=`<div class="pills">${['Todos',...STATUS,'Fiado'].map(x=>`<button class="${ofil===x?'on':''}" onclick="ofil='${x}';render()">${x} (${x==='Todos'?regular.length:cnt(x)})</button>`).join('')}</div>${aSearch('Buscar por número do pedido ou nome do cliente')}
+  ${l.length?l.map(o=>`<div class="card in ord" style="margin-bottom:14px"><div class="ordh"><div><span class="ordid">${o.id}</span><span class="ordc">${esc(o.customer.name)}</span></div><span class="st" data-s="${o.status}">${o.status}</span></div><div class="ordm">${dlBadge(o)}${fiadoBadge(o)}${o.store?'<span class="ordk">Venda na loja</span>':''}<span>${esc(o.date)}</span>${o.customer.phone?`<span>${esc(o.customer.phone)}</span>`:''}${o.store?'':`<span>${esc(o.customer.addr)}${o.customer.cep?' · CEP '+esc(o.customer.cep):''}</span>`}</div><div class="ordi">${o.items.map(i=>`<div><span>${i.qty}x ${esc(i.name)}${variantText(i)?' ('+variantText(i)+')':''}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}</div><div class="ordt"><b>${money(o.total)}</b><small>${o.store?'':'Frete '+esc(o.ship.name)+' '+money(o.ship.price)+' · '}Pagamento: ${esc(o.pay||'a combinar')}${o.coupon?' · Cupom '+esc(o.coupon.code)+' (−'+money(o.discount||0)+')':''}</small></div>
+  <div class="row ordact">${o.status===STATUS[0]?`<button class="btn sm" onclick="setStatus('${o.id}','Pago')">Confirmar pagamento</button>`:''}${fiadoAct(o)}<select onchange="setStatus('${o.id}',this.value)" aria-label="Status">${(o.status==='Fiado'?['Fiado','Entregue','Cancelado']:STATUS).map(x=>`<option ${x===o.status?'selected':''}>${x}</option>`).join('')}</select>${o.store||oArea(o)==='importados'?'':`<input id="tr${o.id}" placeholder="Código de rastreio" value="${esc(o.tracking)}"><button class="btn sm" onclick="setTrack('${o.id}')">Salvar rastreio</button>`}${o.customer.phone?`<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="${custWa(o)}">Avisar cliente</a>`:''}<button class="btn sm danger" onclick="askDelOrder('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Nenhum pedido encontrado.</div>'}`;
  }
  if(atab==='espera'){
   const k=aq.trim().toLowerCase(),l=AO().filter(o=>o.status==='Lista de espera'&&(!k||o.id.toLowerCase().includes(k)||String(o.customer.name||'').toLowerCase().includes(k)));

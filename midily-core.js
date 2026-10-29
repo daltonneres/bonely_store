@@ -88,7 +88,7 @@ function create(o){
  }
 
  /* ---------- pedidos / relatório ---------- */
- const oTs=x=>{if(x.ts)return x.ts;const m=String(x.date).match(/(\d+)\/(\d+)\/(\d+)/);return m?new Date(+m[3],+m[2]-1,+m[1]).getTime():Date.now()};
+ const oTs=x=>{if(x.paidTs)return x.paidTs;if(x.ts)return x.ts;const m=String(x.date).match(/(\d+)\/(\d+)\/(\d+)/);return m?new Date(+m[3],+m[2]-1,+m[1]).getTime():Date.now()};
  const oArea=x=>x.area||((x.items||[]).some(i=>!String(i.key).startsWith('c')&&isImp((S.products||[]).find(p=>p.id==i.key)))?'importados':'moda');
  const areaOrders=()=>(S.orders||[]).filter(x=>!x.sample&&oArea(x)===area());
  function units(list){const m={};list.forEach(x=>(x.items||[]).forEach(i=>{m[i.name]=(m[i.name]||0)+(+i.qty||0)}));return m}

@@ -449,6 +449,7 @@ body.is-panel .st[data-s="Separando"]{--c:#7fa9cf}
 body.is-panel .st[data-s="Enviado"]{--c:#a995d6}
 body.is-panel .st[data-s="Entregue"]{--c:#6fc28e}
 body.is-panel .st[data-s="Cancelado"]{--c:#d9806b}
+body.is-panel .st[data-s="Fiado"]{--c:#e08f5a}
 
 /* janelas (escolha do painel, novo pedido) */
 body.is-panel .modal{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
