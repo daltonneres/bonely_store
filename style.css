@@ -1076,3 +1076,9 @@ body.is-panel .popon .ic{width:16px;height:16px;color:#8fb08a}
 .pixrow span{color:var(--mut);font-size:13px}
 .pixrow b{color:var(--gold2);font-weight:500;word-break:break-all;text-align:right;font-size:15px}
 .pixbox .btn{margin:6px 0 4px;width:100%}
+
+/* estoque: faixa automática e cartão esgotado */
+.rb-out{background:#2a1714;color:#e3b0a6;border-top:1px solid rgba(190,126,115,.55)}
+.rb-low{background:#17130d;color:var(--gold2);border-top:1px solid var(--gold)}
+.tag.low{color:var(--gold2)}
+.card.soldout .ph img{opacity:.5;filter:grayscale(.5)}

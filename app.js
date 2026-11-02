@@ -38,7 +38,7 @@ const save=()=>{
 const $=s=>document.querySelector(s);
 const money=v=>Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='',pid=null,shareId=null,asp=null,asn='',asw='',aq='',ofil='Todos',vper='14d',cbSel=[],cbName='',cbPrice='',newQ=[],cdraft={},kindF='',aarea=null,apick=false,aedit=null,justOrdered=null,trkPre=null,added=null;
+let view=window.STATIC_PAGE?'doc':'loja',filter='tudo',genF='',collF='',cartOpen=false,ship=null,adminOk=false,atab='produtos',msg='',trk=null,modal='',fs=null,menu=false,q='',pg='',pid=null,shareId=null,asp=null,asn='',asw='',aq='',ofil='Todos',vper='14d',cbSel=[],cbName='',cbPrice='',newQ=[],cdraft={},kindF='',onlyAv=false,aarea=null,apick=false,aedit=null,justOrdered=null,trkPre=null,added=null;
 
 /* Camada de dados: com firebase.js carregado, a loja lê do Firestore e o painel grava nele (save() -> FB.queue). Sem ele, cai no localStorage (prévia). */
 
@@ -161,13 +161,15 @@ function giveStk(p,q,s){
 function sizeOpts(p){
  let first=true;
  return szOf(p).map(x=>{const q=stkQ(p,x),out=hasStk(p)&&q<=0,sel=!out&&first;if(sel)first=false;
-  return `<option value="${esc(x)}"${sel?' selected':''}>${esc(x)}${hasStk(p)?(out?' (esgotado)':q<=3?' (restam '+q+')':''):''}</option>`}).join('');
+  return `<option value="${esc(x)}"${sel?' selected':''}>${esc(x)}${hasStk(p)?(out?' (esgotado)':q<=LOWV?' (restam '+q+')':''):''}</option>`}).join('');
 }
 function colorsOf(p){return parseOpts(p&&((p.colors&&Array.isArray(p.colors)?p.colors.join(','):p.colors)||p.color)||'')}
 function colorChoices(p){const cs=colorsOf(p);if(!cs.length)return '';const sel=pickedColor[p.id]||cs[0];return `<div class="color-pick" role="group" aria-label="Escolha a cor de ${esc(p.name)}">${cs.map(c=>`<button type="button" class="color-choice${sel===c?' on':''}" data-color="${esc(c)}" onclick="pickColor(${p.id},this)" aria-pressed="${sel===c}" title="${esc(c)}"><i style="--swatch:${swatchColor(c)}"></i><span>${esc(c)}</span></button>`).join('')}</div>`}
 function pickColor(id,b){const wrap=b.closest('.color-pick');pickedColor[id]=b.dataset.color;wrap.querySelectorAll('.color-choice').forEach(x=>{const on=x===b;x.classList.toggle('on',on);x.setAttribute('aria-pressed',String(on))})}
 function swatchColor(value){const c=String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();for(const [re,col] of [[/preto|black/,'#171717'],[/branco|white/,'#f4f0e8'],[/cinza|gray|grey|prata|silver/,'#999'],[/vermelh|red|cereja|vinho|bordo/,'#b73742'],[/laranj|orange|coral/,'#ed8046'],[/amarel|yellow|dourad|gold/,'#d5aa45'],[/verde|green|oliva|limao/,'#5d8a55'],[/azul|blue|marinh|turquesa|ciano/,'#4779aa'],[/roxo|lilas|violet|purple/,'#8963a8'],[/rosa|pink|magenta/,'#d57d9d'],[/marrom|brown|bege|caramelo|nude/,'#aa805e']])if(re.test(c))return col;return '#c9a25f'}
-const lowTag=p=>!hasStk(p)&&p.stock<=3?`<div class="tag">Restam ${p.stock}</div>`:'';
+/* estoque: esgotado = total 0; poucas unidades = de 1 a 5 */
+const LOWV=5,outP=p=>!!p&&(+p.stock||0)<=0,lowP=p=>!!p&&p.stock>0&&p.stock<=LOWV;
+const lowTag=p=>lowP(p)?`<div class="tag low">Poucas unidades · restam ${p.stock}</div>`:'';
 function stockOf(key,size){
  if(String(key).startsWith('c')){const c=item(key).combo;return Math.min(...c.items.map(i=>S.products.find(p=>p.id==i)?.stock??0))}
  const p=item(key).p;return size?stkQ(p,size):p.stock;
@@ -506,6 +508,7 @@ function match(p,nk){
   const g=p.gen||'Unissex';
   if(filter!=='tudo'&&g!==filter&&g!=='Unissex')return false;
  }
+ if(onlyAv&&outP(p))return false;
  if(!nk){if(kindF==='__none')return !p.kind;if(kindF&&p.kind!==kindF)return false}
  return true;
 }
@@ -615,8 +618,8 @@ async function enterAdmin(){
 const TAGS=['Promoção','Edição limitada','Novidade','Últimas peças'];
 const promoOn=p=>!!(p&&+p.oldPrice>+p.price);
 const priceH=p=>promoOn(p)?`<s class="old">${money(p.oldPrice)}</s><b class="nw">${money(p.price)}</b>`:money(p.price);
-const ribTxt=p=>{const t=String(p&&p.tag||'').trim();if(!t)return '';return t==='Promoção'&&promoOn(p)?'Promoção −'+Math.round((1-p.price/p.oldPrice)*100)+'%':t};
-const rib=p=>{const t=ribTxt(p);return t?`<span class="rb${p.tag==='Promoção'?' rb-promo':p.tag==='Edição limitada'?' rb-lim':''}">${esc(t)}</span>`:''};
+const ribTxt=p=>{if(outP(p))return 'Esgotado';const t=String(p&&p.tag||'').trim();if(!t)return lowP(p)?'Restam '+p.stock:'';return t==='Promoção'&&promoOn(p)?'Promoção −'+Math.round((1-p.price/p.oldPrice)*100)+'%':t};
+const rib=p=>{const t=ribTxt(p);return t?`<span class="rb${outP(p)?' rb-out':p.tag==='Promoção'?' rb-promo':p.tag==='Edição limitada'?' rb-lim':!String(p.tag||'').trim()?' rb-low':''}">${esc(t)}</span>`:''};
 function tagForm(ep){
  const t=ep&&ep.tag||'',pre=TAGS.includes(t),sel=!t?'':pre?t:'__c';
  return `<label for="ptag">Faixa no produto</label><select id="ptag" onchange="tagSel()"><option value="">Nenhuma</option>${TAGS.map(x=>`<option ${sel===x?'selected':''}>${x}</option>`).join('')}<option value="__c" ${sel==='__c'?'selected':''}>Outra (escrever)</option></select><input id="ptagc" maxlength="18" placeholder="Texto da faixa (até 18 letras)" aria-label="Texto da faixa" value="${sel==='__c'?esc(t):''}" style="${sel==='__c'?'':'display:none'}"><div id="poldw" style="${t==='Promoção'?'':'display:none'}"><label for="pold">Preço antigo (R$)</label><input id="pold" type="number" min="0" step="0.01" value="${ep&&ep.oldPrice?ep.oldPrice:''}"><p class="hint">O preço acima vira o preço da promoção. O preço antigo aparece riscado na loja e a faixa mostra a porcentagem de desconto.</p></div>`;
@@ -629,17 +632,19 @@ function vCatsImp(){return `<nav class="cats" aria-label="Lojas"><div class="wra
 function vCats(){const T=(k,t,s,h)=>`<${h?'a href="'+h+'"':'button onclick="'+k+'"'} class="ctile${h?' imp':''}"><b>${t}</b><small>${s}</small><span class="ca" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></${h?'a':'button'}>`;
  return `<nav class="cats" aria-label="Categorias"><div class="wrap">${T("q='';cat('Feminino')",'Feminino','Moda feminina')}${T("q='';cat('Masculino')",'Masculino','Moda masculina')}${S.combos.length?T("goto('combos')",'Combos','Leve junto, pague menos'):''}</div></nav>`}
 let KS=[];
+const availBar=()=>`<div class="pills impf"><button class="${onlyAv?'on':''}" aria-pressed="${onlyAv}" onclick="onlyAv=!onlyAv;render()">Somente disponíveis</button></div>`;
 function kindBar(){const pool=S.products.filter(p=>match(p,1)),ks=[...new Set(pool.map(x=>x.kind).filter(Boolean))],sem=pool.some(x=>!x.kind);KS=ks;if(!ks.length)return '';
  return `<div class="pills impf"><button class="${!kindF?'on':''}" onclick="kindF='';render()">Todos</button>${ks.map((k,i)=>`<button class="${kindF===k?'on':''}" onclick="kindF=KS[${i}];render()">${esc(k)}</button>`).join('')}${sem?`<button class="${kindF==='__none'?'on':''}" onclick="kindF='__none';render()">Outros</button>`:''}</div>`}
 function vLoja(){
- const list=S.products.filter(p=>match(p));
+ const list=S.products.filter(p=>match(p)).sort((a,b)=>outP(a)-outP(b)); /* esgotados vão para o fim (ordem original mantida) */
  return `${SEC==='importados'?`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><h1 class="imp">IMPORTADOS</h1><p>Produtos importados selecionados pela Bonely Store, com entrega na região ou retirada.</p></div></section>`:`<section class="hero"><div class="wrap"><div class="spark">✦ ✧ ✦</div><img class="herologo" src="${LOGO}" alt="Bonely Store"><p class="herorot" id="herorot" aria-live="off">Moda feminina, masculina e peças especiais, com envio para todo o Brasil.</p></div></section>`}
  ${SEC==='importados'?vCatsImp():''}
  <div class="benefits"><div class="wrap">${BEN.map(b=>`<div class="ben">${IC[b[0]]}<span><b>${b[1]}</b>${b[2]}</span></div>`).join('')}</div></div>
  <section id="cat"><div class="wrap"><h2>${SEC==='importados'?'Importados':'Catálogo'}</h2><p class="sub">${q?`Resultados para “${esc(q)}” <button class="btn sm ghost" onclick="q='';render()">Limpar busca</button>`:(SEC==='importados'?'Produtos importados selecionados.':'Moda feminina e masculina.')}</p>
  ${IMP?kindBar():`<div class="pills impf">${[['tudo','Tudo'],['Feminino','Feminino'],['Masculino','Masculino']].map(([k,l])=>`<button class="${filter===k?'on':''}" onclick="filter='${k}';kindF='';render()">${l}</button>`).join('')}</div>
  ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';kindF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];kindF='';render()">${esc(c)}</button>`).join('')}</div>`:''}`}
- ${list.length?`<div class="grid impgrid">${list.map(p=>`<div class="card"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><span class="cbadge">${esc(p.kind||(IMP?'Importado':p.gen)||'Moda')}</span><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${colorMark(p)?colorMark(p)+' · ':''}${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${priceH(p)}</div>
+ ${availBar()}
+ ${list.length?`<div class="grid impgrid">${list.map(p=>`<div class="card${outP(p)?' soldout':''}"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><span class="cbadge">${esc(p.kind||(IMP?'Importado':p.gen)||'Moda')}</span><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${colorMark(p)?colorMark(p)+' · ':''}${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${priceH(p)}</div>
   ${p.stock>0?`${colorChoices(p)}<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${sizeOpts(p)}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${lowTag(p)}`:p.type==='avulso'?'<div class="tag err">Esgotado</div>':`<div class="stockout"><span class="stockout-label"><span class="stockout-dot"></span>Esgotado</span><button class="btn sm waitlist-btn" onclick="openProd(${p.id})">Entrar na lista de espera <span aria-hidden="true">→</span></button></div>`}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
  </div></section>
  ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid impgrid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
