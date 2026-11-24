@@ -349,7 +349,7 @@ async function adminStep(txt,val){
   if(!p)return sale?adminSale():adminStock();
   a.productId=p.id;a.product=p;
   const next=sale?'admin_sale':'admin_stock';
-  if(p.sizes.length>1){M.step=next+'_size';return say({t:'Qual '+(aarea==='importados'?'opção':'tamanho')+'?',chips:p.levels.slice(0,10).map((x,i)=>[x.size+' · '+x.stock+' em estoque','adm:size:'+i]).concat([['Cancelar','adm:menu']])})}
+  if(p.sizes.length>1){M.step=next+'_size';return say({t:'Qual '+(aarea==='importados'?'opção':'tamanho')+'?',chips:p.levels.map((x,i)=>[x.size+' · '+x.stock+' em estoque','adm:size:'+i]).concat([['Cancelar','adm:menu']])})}
   a.size=p.sizes[0]||'Único';return sale?askSaleQty():askStockType();
  }
  if(M.step==='admin_stock_size'||M.step==='admin_sale_size'){
