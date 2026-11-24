@@ -290,12 +290,12 @@ function adminFinance(){M.c.adm={action:'finance'};M.step='admin_fin_kind';retur
 function adminStock(){
  const P=window.midAdmin.products();if(!P.length)return say('Não encontrei produtos neste painel.');
  M.c.adm={action:'stock',products:P};M.step='admin_stock_product';
- return say({t:'Qual produto você quer atualizar?',chips:[...P.slice(0,9).map(p=>[p.name+' · '+p.stock+' em estoque','adm:product:'+p.id]),['Cancelar','adm:menu']]});
+ return say({t:'Qual produto você quer atualizar?',chips:[...P.map(p=>[p.name+' · '+p.stock+' em estoque','adm:product:'+p.id]),['Cancelar','adm:menu']]});
 }
 function adminSale(){
  const P=window.midAdmin.products().filter(p=>+p.stock>0);if(!P.length)return say('Não encontrei produtos com estoque disponível para registrar uma venda.');
  M.c.adm={action:'sale',products:P};M.step='admin_sale_product';
- return say({t:'Qual produto foi vendido?',chips:[...P.slice(0,9).map(p=>[p.name+' · '+p.stock+' em estoque','adm:saleproduct:'+p.id]),['Cancelar','adm:menu']]});
+ return say({t:'Qual produto foi vendido?',chips:[...P.map(p=>[p.name+' · '+p.stock+' em estoque','adm:saleproduct:'+p.id]),['Cancelar','adm:menu']]});
 }
 function adminExtract(days){
  if(!days){M.step='admin_extract_period';return say({t:'De qual período você quer ver o extrato?',chips:[['Últimos 7 dias','adm:extract:7'],['Últimos 30 dias','adm:extract:30'],['Últimos 90 dias','adm:extract:90'],['Voltar','adm:menu']]})}
