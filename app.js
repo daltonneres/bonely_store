@@ -161,7 +161,7 @@ function giveStk(p,q,s){
 function sizeOpts(p){
  let first=true;
  return szOf(p).map(x=>{const q=stkQ(p,x),out=hasStk(p)&&q<=0,sel=!out&&first;if(sel)first=false;
-  return `<option value="${esc(x)}"${sel?' selected':''}>${esc(x)}${hasStk(p)?(out?' (esgotado)':q<=LOWV?' (restam '+q+')':''):''}</option>`}).join('');
+  return `<option value="${esc(x)}"${sel?' selected':''}>${esc(x)}</option>`}).join('');
 }
 function colorsOf(p){return parseOpts(p&&((p.colors&&Array.isArray(p.colors)?p.colors.join(','):p.colors)||p.color)||'')}
 function colorChoices(p){const cs=colorsOf(p);if(!cs.length)return '';const sel=pickedColor[p.id]||cs[0];return `<div class="color-pick" role="group" aria-label="Escolha a cor de ${esc(p.name)}">${cs.map(c=>`<button type="button" class="color-choice${sel===c?' on':''}" data-color="${esc(c)}" onclick="pickColor(${p.id},this)" aria-pressed="${sel===c}" title="${esc(c)}"><i style="--swatch:${swatchColor(c)}"></i><span>${esc(c)}</span></button>`).join('')}</div>`}
@@ -169,12 +169,16 @@ function pickColor(id,b){const wrap=b.closest('.color-pick');pickedColor[id]=b.d
 function swatchColor(value){const c=String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();for(const [re,col] of [[/preto|black/,'#171717'],[/branco|white/,'#f4f0e8'],[/cinza|gray|grey|prata|silver/,'#999'],[/vermelh|red|cereja|vinho|bordo/,'#b73742'],[/laranj|orange|coral/,'#ed8046'],[/amarel|yellow|dourad|gold/,'#d5aa45'],[/verde|green|oliva|limao/,'#5d8a55'],[/azul|blue|marinh|turquesa|ciano/,'#4779aa'],[/roxo|lilas|violet|purple/,'#8963a8'],[/rosa|pink|magenta/,'#d57d9d'],[/marrom|brown|bege|caramelo|nude/,'#aa805e']])if(re.test(c))return col;return '#c9a25f'}
 /* estoque: esgotado = total 0; poucas unidades = de 1 a 5 */
 const LOWV=5,outP=p=>!!p&&(+p.stock||0)<=0,lowP=p=>!!p&&p.stock>0&&p.stock<=LOWV;
+/* compra ligada/desligada: p.sale===false = so visualizacao (produtos antigos, sem o campo, continuam a venda) */
+const canBuy=p=>!p||p.sale!==false;
 const lowTag=p=>lowP(p)?`<div class="tag low">Poucas unidades · restam ${p.stock}</div>`:'';
 function stockOf(key,size){
  if(String(key).startsWith('c')){const c=item(key).combo;return Math.min(...c.items.map(i=>S.products.find(p=>p.id==i)?.stock??0))}
  const p=item(key).p;return size?stkQ(p,size):p.stock;
 }
 function addCart(key,desired){
+ if(String(key).startsWith('c')){const cc=item(key)&&item(key).combo;if(cc&&cc.items.some(i=>{const pp=S.products.find(x=>x.id==i);return pp&&!canBuy(pp)}))return alert('Este combo está disponível apenas para visualização.')}
+ else{const pp=item(key)&&item(key).p;if(pp&&!canBuy(pp))return alert('Este produto está disponível apenas para visualização.')}
  const sel=$('#sz'+key),size=sel?sel.value:'';
  const color=String(key).startsWith('c')?'':(pickedColor[key]||colorsOf(item(key)?.p)[0]||'');
  const ex=CART().find(i=>i.key==key&&i.size==size&&(i.color||'')===color);
@@ -256,6 +260,8 @@ async function _checkout(){
  const g=id=>($(id)?$(id).value:'').trim();
  const c={name:g('#cn'),phone:g('#cp'),email:g('#ce').toLowerCase(),addr:g('#ca')};
  if(!CART().length)return alert('Carrinho vazio.');
+ {const bad=CART().filter(i=>{if(String(i.key).startsWith('c')){const cc=item(i.key)&&item(i.key).combo;return cc&&cc.items.some(x=>{const pp=S.products.find(y=>y.id==x);return pp&&!canBuy(pp)})}const pp=item(i.key)&&item(i.key).p;return pp&&!canBuy(pp)});
+  if(bad.length){S[CK]=CART().filter(i=>!bad.includes(i));save();render();return alert('Alguns itens estão disponíveis apenas para visualização e saíram do carrinho.')}}
  const retira=IMP&&ship&&ship.mode==='retirada';
  if(IMP&&(!ship||!ship.opts))return alert('Escolha retirada ou a cidade de entrega.');
  if(IMP&&ship.other&&!String(ship.city||'').trim())return alert('Informe o nome da cidade de entrega.');
@@ -354,6 +360,7 @@ function addProd(){
  if(!n||isNaN(pr))return alert('Informe nome e preço.');
  const v=id=>$(id)?$(id).value.trim():'';
  const has=id=>!!$(id),d={...(aedit?{}:{coll:'',sizes:'Único',color:'',brand:'',desc:'',specs:''}),name:n,price:pr,gen:$('#pg')?$('#pg').value:''};
+ d.sale=has('#psale')?$('#psale').checked:true;
  if(has('#poptionname'))d.optionName=v('#poptionname')||optCfg().name||'Opção';
  if(has('#pcolor'))d.color=v('#pcolor');
  if(has('#ptag')){const sv=$('#ptag').value,tg=sv==='__c'?v('#ptagc'):sv,old=tg==='Promoção'?parseFloat(String($('#pold').value).replace(',','.')):0;
@@ -377,6 +384,7 @@ function addProd(){
  Object.keys(newStk).forEach(x=>{if(newStk[x]>0)S.moves.unshift({date:new Date().toLocaleString('pt-BR'),name:n,size:x,type:'entrada',qty:newStk[x],note:'Cadastro inicial',area:aarea})});
  pform=false;newImg='';imgDraft=null;save();render();toast('Produto salvo.');
 }
+function toggleSale(id){const p=S.products.find(x=>x.id==id);if(!p)return;p.sale=p.sale===false;save();render();toast(p.sale?'Compra liberada: '+p.name+'.':'Compra pausada: '+p.name+' fica só para visualização.')}
 function delProd(id){if(confirm('Excluir produto?')){if(aedit===id)aedit=null;S.products=S.products.filter(p=>p.id!==id);save();render()}}
 async function addMove(){
  const p=S.products.find(x=>x.id==$('#mp').value),q=parseInt($('#mq').value),t=$('#mt').value,z=$('#ms')?$('#ms').value:'',note=($('#mn').value||'').trim();
@@ -577,7 +585,7 @@ function vProduto(){
  const imp=p.type==='avulso';
  return `<section><div class="wrap"><p class="backrow"><button class="backbtn" onclick="go('loja')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Voltar ao catálogo</button></p>
  <div class="pdp"><div class="card">${gallery(p)}</div><div><h2 style="margin-bottom:4px">${esc(p.name)}</h2><div class="tag">${colorMark(p)?colorMark(p)+' · ':''}${[p.brand?'Marca '+p.brand:'',imp?'Importado':p.gen,p.kind,p.coll].filter(Boolean).map(esc).join(' · ')}</div><div class="price" style="font-size:28px;margin:12px 0">${priceH(p)}</div>${p.desc?`<p class="pdesc">${esc(p.desc)}</p>`:''}${specsHtml(p)}
- ${imp&&p.stock<=0?'<div class="tag err">Esgotado</div><div class="row"><button class="btn ghost" onclick="openShare('+p.id+')">'+IC.share+'Compartilhar</button></div>':`${colorChoices(p)}<label>${esc(optName(p))}</label><select id="sz${p.id}">${sizeOpts(p)}</select><label for="qty${p.id}">Quantidade desejada</label><input id="qty${p.id}" type="number" min="1" step="1" value="1" inputmode="numeric">${p.stock>0?lowTag(p):'<div class="stockout-note"><span class="stockout-dot"></span>Sem estoque no momento. Você pode solicitar pela lista de espera.</div>'}<div class="row"><button class="btn${p.stock>0?'':' waitlist-btn'}" onclick="addCart(${p.id},Math.max(1,parseInt(document.getElementById('qty${p.id}').value)||1))">${p.stock>0?'Adicionar ao carrinho':'Entrar na lista de espera'}</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`}</div></div></div></section>`;
+ ${!canBuy(p)?'<div class="tag viewonly">Disponível apenas para visualização</div><div class="row"><button class="btn ghost" onclick="openShare('+p.id+')">'+IC.share+'Compartilhar</button></div>':imp&&p.stock<=0?'<div class="tag err">Esgotado</div><div class="row"><button class="btn ghost" onclick="openShare('+p.id+')">'+IC.share+'Compartilhar</button></div>':`${colorChoices(p)}<label>${esc(optName(p))}</label><select id="sz${p.id}">${sizeOpts(p)}</select><label for="qty${p.id}">Quantidade desejada</label><input id="qty${p.id}" type="number" min="1" step="1" value="1" inputmode="numeric">${p.stock>0?lowTag(p):'<div class="stockout-note"><span class="stockout-dot"></span>Sem estoque no momento. Você pode solicitar pela lista de espera.</div>'}<div class="row"><button class="btn${p.stock>0?'':' waitlist-btn'}" onclick="addCart(${p.id},Math.max(1,parseInt(document.getElementById('qty${p.id}').value)||1))">${p.stock>0?'Adicionar ao carrinho':'Entrar na lista de espera'}</button><button class="btn ghost" onclick="openShare(${p.id})">${IC.share}Compartilhar</button></div>`}</div></div></div></section>`;
 }
 function updPrev(){const p=curShareProd(),e=$('#amsg');if(p&&e)e.innerHTML=fmtWA(shareMsg(p,asn.trim(),1))}
 function vShareAdmin(){
@@ -618,7 +626,7 @@ async function enterAdmin(){
 const TAGS=['Promoção','Edição limitada','Novidade','Últimas peças'];
 const promoOn=p=>!!(p&&+p.oldPrice>+p.price);
 const priceH=p=>promoOn(p)?`<s class="old">${money(p.oldPrice)}</s><b class="nw">${money(p.price)}</b>`:money(p.price);
-const ribTxt=p=>{if(outP(p))return 'Esgotado';const t=String(p&&p.tag||'').trim();if(!t)return lowP(p)?'Restam '+p.stock:'';return t==='Promoção'&&promoOn(p)?'Promoção −'+Math.round((1-p.price/p.oldPrice)*100)+'%':t};
+const ribTxt=p=>{if(p&&p.sale===false)return 'Só visualização';if(outP(p))return 'Esgotado';const t=String(p&&p.tag||'').trim();if(!t)return lowP(p)?'Restam '+p.stock:'';return t==='Promoção'&&promoOn(p)?'Promoção −'+Math.round((1-p.price/p.oldPrice)*100)+'%':t};
 const rib=p=>{const t=ribTxt(p);return t?`<span class="rb${outP(p)?' rb-out':p.tag==='Promoção'?' rb-promo':p.tag==='Edição limitada'?' rb-lim':!String(p.tag||'').trim()?' rb-low':''}">${esc(t)}</span>`:''};
 function tagForm(ep){
  const t=ep&&ep.tag||'',pre=TAGS.includes(t),sel=!t?'':pre?t:'__c';
@@ -645,9 +653,9 @@ function vLoja(){
  ${S.colls.length?`<div class="chips"><span>Coleção</span><button class="${!collF?'on':''}" onclick="collF='';kindF='';render()">Todas</button>${S.colls.map((c,i)=>`<button class="${collF===c?'on':''}" onclick="collF=S.colls[${i}];kindF='';render()">${esc(c)}</button>`).join('')}</div>`:''}`}
  ${availBar()}
  ${list.length?`<div class="grid impgrid">${list.map(p=>`<div class="card${outP(p)?' soldout':''}"><button class="shbtn" onclick="openShare(${p.id})" aria-label="Compartilhar ${esc(p.name)}">${IC.share}</button><span class="cbadge">${esc(p.kind||(IMP?'Importado':p.gen)||'Moda')}</span><div class="clk" onclick="openProd(${p.id})" role="link" tabindex="0" onkeydown="if(event.key==='Enter')openProd(${p.id})">${ph(p)}</div><div class="in"><h3 class="clk" onclick="openProd(${p.id})">${esc(p.name)}</h3><div class="tag">${colorMark(p)?colorMark(p)+' · ':''}${[p.gen,p.coll||(p.type==='avulso'?'Importado':'')].filter(Boolean).map(esc).join(' · ')}</div><div class="price">${priceH(p)}</div>
-  ${p.stock>0?`${colorChoices(p)}<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${sizeOpts(p)}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${lowTag(p)}`:p.type==='avulso'?'<div class="tag err">Esgotado</div>':`<div class="stockout"><span class="stockout-label"><span class="stockout-dot"></span>Esgotado</span><button class="btn sm waitlist-btn" onclick="openProd(${p.id})">Entrar na lista de espera <span aria-hidden="true">→</span></button></div>`}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
+  ${!canBuy(p)?'<div class="tag viewonly">Somente visualização</div>':p.stock>0?`${colorChoices(p)}<div class="row"><select id="sz${p.id}" aria-label="${esc(optName(p))}">${sizeOpts(p)}</select><button class="btn sm" onclick="addCart(${p.id})">Adicionar</button></div>${lowTag(p)}`:p.type==='avulso'?'<div class="tag err">Esgotado</div>':`<div class="stockout"><span class="stockout-label"><span class="stockout-dot"></span>Esgotado</span><button class="btn sm waitlist-btn" onclick="openProd(${p.id})">Entrar na lista de espera <span aria-hidden="true">→</span></button></div>`}</div></div>`).join('')}</div>`:'<div class="empty">'+(SEC==='importados'?'Em breve, novos produtos por aqui.':'Nenhuma peça nesse filtro.')+'</div>'}
  </div></section>
- ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid impgrid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
+ ${S.combos.length&&SEC!=='importados'?`<section id="combos" style="border-top:1px solid var(--line)"><div class="wrap"><h2>Combos</h2><p class="sub">Leve junto e pague menos.</p><div class="grid impgrid">${S.combos.map(c=>{const ps=c.items.map(i=>S.products.find(p=>p.id==i)).filter(Boolean);const full=ps.reduce((a,p)=>a+p.price,0);return `<div class="card"><div class="in"><h3>${esc(c.name)}</h3><div class="tag">${ps.map(p=>esc(p.name)).join(' + ')}</div><div class="tag"><s>${money(full)}</s></div><div class="price">${money(c.price)}</div><div class="row">${ps.some(p=>!canBuy(p))?'<span class="tag viewonly">Somente visualização</span>':stockOf('c'+c.id)>0?`<button class="btn sm" onclick="addCart('c${c.id}')">Adicionar combo</button>`:'<span class="tag err">Esgotado</span>'}</div></div></div>`}).join('')}</div></div></section>`:''}`;
 }
 function vConta(){
  const c=S.customer;
@@ -1103,6 +1111,7 @@ function prodForm(ep){
  +(on('specs')?`<label>${L('specs')}</label><textarea id="px" rows="6" spellcheck="false">${esc(ep&&String(ep.specs||'').trim()?ep.specs:SPEC_TPL())}</textarea><p class="hint">Complete depois dos dois pontos. Linha sem preenchimento não aparece na loja.</p>`:'')
  +(['brand','desc','specs'].some(on)?'</div></details>':'')
  +(on('img')?`<label>${L('img')}</label><input type="file" accept="image/*" multiple onchange="pickImgs(this)"><div class="imgl" id="imgl">${imgThumbs()}</div><span id="imgok" class="tag">${imgNote()}</span><p class="hint">Dá para anexar mais de uma foto (frente, verso...). Na loja elas passam sozinhas a cada 5 segundos e também têm setinhas.</p>`:'')
+ +`<label class="saleo"><input type="checkbox" id="psale" ${!ep||ep.sale!==false?'checked':''}><span>Disponível para compra</span></label><p class="hint">Desligado, o cliente só vê o produto na loja e não consegue comprar.</p>`
  +`<div class="row"><button class="btn" onclick="addProd()">${ep?'Salvar alterações':'Salvar produto'}</button><button class="btn ghost" onclick="cancelEdit()">Cancelar</button></div>`;
 }
 function vConfig(){
@@ -1233,7 +1242,7 @@ function vAdmin(){
  if(atab==='produtos'){
   const l=AP().filter(aMatch),ep=aedit?S.products.find(x=>x.id==aedit):null,open=!!(ep||pform);
   body=`<div class="two"><div class="pform${open?' open':''}"><h3>${ep?'Editar produto':'Novo produto'}</h3>${prodForm(ep)}</div>
-  <div class="plistbox">${open?'':`<button class="btn mobnew" onclick="pform=true;render();window.scrollTo(0,0)">+ Novo produto</button>`}${aSearch('Buscar produto pelo nome')}<div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b><small>${[p.kind||(p.type==='avulso'?'Importado':''),p.coll,money(p.price)].filter(Boolean).map(esc).join(' · ')}</small><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=3?'err':''}">${p.stock}</b><small>em estoque</small></div><div class="pac"><button class="btn sm ghost" onclick="editProd(${p.id})">Editar</button><button class="btn sm ghost danger" onclick="delProd(${p.id})">Excluir</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}</div></div>`;
+  <div class="plistbox">${open?'':`<button class="btn mobnew" onclick="pform=true;render();window.scrollTo(0,0)">+ Novo produto</button>`}${aSearch('Buscar produto pelo nome')}<div class="plist">${l.map(p=>`<div class="pit"><span class="pth">${p.img?`<img src="${p.img}" alt="">`:'B'}</span><div class="pin"><b>${esc(p.name)}</b>${p.sale===false?'<span class="tag viewonly">Só visualização</span>':''}<small>${[p.kind||(p.type==='avulso'?'Importado':''),p.coll,money(p.price)].filter(Boolean).map(esc).join(' · ')}</small><div class="szr">${stkChips(p)}</div></div><div class="pst"><b class="${p.stock<=3?'err':''}">${p.stock}</b><small>em estoque</small></div><div class="pac"><button class="btn sm ghost" onclick="toggleSale(${p.id})">${p.sale===false?'Liberar compra':'Pausar compra'}</button><button class="btn sm ghost" onclick="editProd(${p.id})">Editar</button><button class="btn sm ghost danger" onclick="delProd(${p.id})">Excluir</button></div></div>`).join('')}</div>${l.length?'':'<div class="empty">Nenhum produto encontrado.</div>'}</div></div>`;
  }
  if(atab==='estoque'){
   const all=AP(),l=all.filter(aMatch),mp=all.find(p=>p.id==mvP)||l[0]||all[0],

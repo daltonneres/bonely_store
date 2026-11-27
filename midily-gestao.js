@@ -82,6 +82,7 @@ function mount(){
  <form class="bar" id="bar"><button class="ibtn" id="att" type="button" aria-label="Enviar fotos" title="Enviar fotos">${IC.clip}</button><input type="file" id="file" accept="image/*" multiple hidden><textarea id="ta" rows="1" maxlength="1500" aria-label="Mensagem para a Midily"></textarea><button class="ibtn send" id="snd" type="submit" aria-label="Enviar">${IC.send}</button></form></div>`;
  const feed=$('#feed'),ta=$('#ta');
  feed.addEventListener('click',onClick);feed.addEventListener('input',onInput);feed.addEventListener('change',onChange);
+ feed.addEventListener('keydown',e=>{const t=e.target;if(e.key==='Enter'&&t.dataset&&t.dataset.act==='nonew'){e.preventDefault();const {i,m}=msgOf(t);const v=String(t.value||'').trim();if(m&&m.w&&v){addOpt(m.w,v);m.w.nn='';rerender(i)}}});
  $('#bar').addEventListener('submit',e=>{e.preventDefault();send()});
  ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)){e.preventDefault();send()}});
  ta.addEventListener('input',()=>{ta.style.height='auto';ta.style.height=Math.min(ta.scrollHeight,140)+'px'});
@@ -103,9 +104,10 @@ function widget(m){
  if(w.type==='sector')return `<div class="sec-pick" style="margin-top:10px">${Object.keys(AREAS).map(k=>`<button type="button" data-act="sec" data-v="${k}"><b>${AREAS[k].n}</b><small>${AREAS[k].d}</small></button>`).join('')}</div>`;
  if(w.type==='confirm')return wConfirm(w);
  if(w.type==='sugg')return wSugg(w);
- if(w.type==='pick')return `<div class="wp"><b class="wt">${esc(w.prompt)}</b><div class="chips f">${[['all','Todos'],['com','Com estoque'],['sem','Sem estoque'],['low','Estoque baixo']].map(([k,l])=>`<button type="button" data-act="pf" data-v="${k}"${(w.f||'all')===k?' class="on"':''}>${l}</button>`).join('')}</div><input class="q" data-act="pq" placeholder="Buscar produto pelo nome" aria-label="Buscar produto" value="${esc(w.q)}" autocomplete="off"><div class="wl">${pickList(w)}</div></div>`;
+ if(w.type==='pick')return `<div class="wp"><b class="wt">${esc(w.prompt)}</b><div class="chips f">${[['all','Todos'],['com','Com estoque'],['sem','Sem estoque'],['low','Estoque baixo']].map(([k,l])=>`<button type="button" data-act="pf" data-v="${k}"${(w.f||'all')===k?' class="on"':''}>${l}</button>`).join('')}</div><input class="q" data-act="pq" placeholder="Buscar produto pelo nome" aria-label="Buscar produto" value="${esc(w.q)}" autocomplete="off"><div class="wl">${pickList(w)}</div>${w.kind==='photo'?'<div class="wa" style="margin-top:10px"><button class="btn ghost" type="button" data-act="pnew">Criar produto novo com estas fotos</button></div>':''}</div>`;
  if(w.type==='sheet')return wSheet(w);
  if(w.type==='calc')return wCalc(w);
+ if(w.type==='newp')return wNewp(w);
   return '';
 }
 function wConfirm(w){
@@ -120,7 +122,7 @@ function pickList(w){
  const L=A.filter(p=>(!w.ids||w.ids.includes(String(p.id)))&&F(p)&&(!k||norm([p.name,p.color,p.brand,p.kind,p.coll].join(' ')).includes(k))).sort((a,b)=>String(a.name).localeCompare(b.name,'pt-BR'));
  const head=`<p class="wst" style="margin:0">${L.length} de ${A.length} produto(s)</p>`;
  if(!L.length)return head+'<p class="wst">Nenhum produto encontrado.</p>';
- return head+L.map(p=>`<button type="button" data-act="pp" data-pid="${esc(p.id)}"><span>${esc(p.name)}</span><small>${st(p)>0?st(p)+' em estoque':'<span class="dl n">Sem estoque</span>'} · ${esc(money(p.price))}</small></button>`).join('');
+ return head+L.map(p=>`<button type="button" data-act="pp" data-pid="${esc(p.id)}"><span>${esc(p.name)}</span><small>${st(p)>0?st(p)+' em estoque':'<span class="dl n">Sem estoque</span>'} · ${esc(money(p.price))}${p.sale===false?' · <span class="dl n">Só visualização</span>':w.kind==='sale'?' · <span class="dl">Compra ativa</span>':''}</small></button>`).join('');
 }
 function wSugg(w){
  const n=w.items.length;
@@ -160,7 +162,7 @@ function paint(keep){
  f.innerHTML=ST.msgs.map(msgHtml).join('')+(ST.busy&&!awaiting?'<div class="m"><span class="dots" aria-label="Midily está escrevendo"><i></i><i></i><i></i></span></div>':'');
  f.scrollTop=keep?top:f.scrollHeight;
  const has=!!ST.area;
- $('#chips').innerHTML=has?[['idea','Sugestões'],['list','Produtos'],['stock','Ajustar estoque'],['disc','Simular desconto'],['calc','Calculadora'],['rep','Resumo da semana'],['photo','Subir fotos']].map(([k,l])=>`<button type="button" data-chip="${k}"${ST.busy?' disabled':''}>${l}</button>`).join(''):'';
+ $('#chips').innerHTML=has?[['idea','Sugestões'],['new','Novo produto'],['list','Produtos'],['stock','Ajustar estoque'],['sale','Ativar/desativar compra'],['disc','Simular desconto'],['calc','Calculadora'],['rep','Resumo da semana'],['photo','Subir fotos']].map(([k,l])=>`<button type="button" data-chip="${k}"${ST.busy?' disabled':''}>${l}</button>`).join(''):'';
  $('#tray').innerHTML=ST.pending.map(id=>`<span><img src="${ST.photos[id]}" alt="Foto ${esc(id)}"><button type="button" data-rm="${esc(id)}" aria-label="Tirar ${esc(id)}">×</button></span>`).join('');
  const ta=$('#ta');ta.disabled=!has;ta.placeholder=!has?'Escolha o setor para começar':ST.pending.length?'Diga a que produto são as fotos':'Escreva o que você precisa';
  $('#snd').disabled=!has||ST.busy;$('#att').disabled=!has;
@@ -191,11 +193,21 @@ function onClick(e){
  if(a==='sapply')return applySheet(i,w);
  if(a==='capply'||a==='cend')return calcAction(w,a);
  if(a==='pf'){w.f=b.dataset.v;return rerender(i)}
+ if(a==='pnew'){ST.msgs.splice(i,1);paint(true);return newProductWidget()}
+ if(a==='nopt'){const v=b.dataset.v,k=w.opts.findIndex(o=>norm(o.s)===norm(v));if(k>=0)w.opts.splice(k,1);else w.opts.push({s:v,q:0});return rerender(i)}
+ if(a==='nadd'){const v=String(w.nn||'').trim();if(!v)return toast('Digite a opção primeiro.');addOpt(w,v);w.nn='';return rerender(i)}
+ if(a==='nqm'||a==='nqp'){const o=w.opts[+b.dataset.k];if(o){o.q=Math.max(0,o.q+(a==='nqp'?1:-1))}return rerender(i)}
+ if(a==='nx'){ST.msgs.splice(i,1);return paint(true)}
+ if(a==='nedit'){w.state='';return rerender(i)}
+ if(a==='nrev')return reviewNew(i,w);
  if(a==='sg'){const x=w.items[+b.dataset.k];if(!x||!x.a)return;if(x.a.kind==='stock')return add('m','',{type:'sheet',pid:x.a.pid,draft:{},state:'edit'});const r=confirmCard(x.a.name,x.a.input);if(!r.ok)toast(r.error);return}
 }
 function onInput(e){
  const t=e.target,a=t.dataset&&t.dataset.act;if(!a)return;
  const {m}=msgOf(t);if(!m||!m.w)return;const w=m.w;
+ if(a==='nf'){w.f[t.dataset.f]=t.value;return}
+ if(a==='nonew'){w.nn=t.value;return}
+ if(a==='nq'){const v=parseInt(t.value,10);const o=w.opts[+t.dataset.k];if(o)o.q=Number.isFinite(v)&&v>=0?v:0;return}
  if(a==='pq'){w.q=t.value;const l=t.closest('.wp').querySelector('.wl');if(l)l.innerHTML=pickList(w);return}
  if(a==='cp'||a==='cn'||a==='cc'){
   const p=core.myProd(w.pid),price=+p.price,root=t.closest('.wcalc');
@@ -206,7 +218,8 @@ function onInput(e){
  }
 }
 function onChange(e){
- const t=e.target;if(!t.dataset||t.dataset.act!=='sv')return;
+ const t=e.target;if(t.dataset&&t.dataset.act==='nsale'){const {m}=msgOf(t);if(m&&m.w)m.w.sale=t.checked;return}
+ if(!t.dataset||t.dataset.act!=='sv')return;
  const {i,m}=msgOf(t);if(!m)return;const v=parseInt(t.value,10);
  m.w.draft[+t.dataset.k]=Number.isFinite(v)&&v>=0?v:0;rerender(i);
 }
@@ -260,6 +273,46 @@ function startChat(){
  ST.area='';ST.msgs=[];ST.api=[];ST.pending=[];ST.photos={};ST.nPhoto=0;ST.busy=false;ST.gen++;
  add('m',hello()+' Eu sou a Midily. Sobre qual setor vamos falar agora?',{type:'sector'});
 }
+
+/* ---------- novo produto pelo chat ---------- */
+const OPTDEF={moda:['PP','P','M','G','GG'],importados:[]};
+function optList(){const o=S.cfg&&S.cfg[ST.area]&&S.cfg[ST.area].opt;return o&&Array.isArray(o.list)&&o.list.length?o.list:OPTDEF[ST.area]||[]}
+function addOpt(w,v){String(v).split(/[\n,]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{if(!w.opts.some(o=>norm(o.s)===norm(x)))w.opts.push({s:x,q:0})})}
+function newProductWidget(pre){
+ const n=ST.pending.length;
+ add('m','Vamos cadastrar um produto novo. Preencha abaixo, marque '+(core.imp()?'as opções':'os tamanhos')+' com a quantidade de cada um e toque em *Revisar*.'+(n?'\nVou usar as '+n+' foto(s) que você anexou (a primeira é a capa).':'\nSe quiser fotos, anexe pelo clipe antes de revisar.'),{type:'newp',id:'n'+(++ST.uid),f:Object.assign({name:'',price:'',gen:'Feminino',kind:'',coll:'',color:'',brand:'',desc:'',optname:''},pre||{}),opts:[],nn:'',sale:true,state:''});
+}
+function nRows(w){
+ return w.opts.map((o,k)=>`<div class="row"><div><b>${esc(o.s)}</b></div><div class="step"><button type="button" data-act="nqm" data-k="${k}" aria-label="Diminuir ${esc(o.s)}">−</button><input type="number" min="0" inputmode="numeric" data-act="nq" data-k="${k}" value="${o.q}" aria-label="Quantidade ${esc(o.s)}"><button type="button" data-act="nqp" data-k="${k}" aria-label="Aumentar ${esc(o.s)}">+</button></div></div>`).join('');
+}
+function wNewp(w){
+ const imp=core.imp(),f=w.f,L=optList(),on=x=>w.opts.some(o=>norm(o.s)===norm(x)),sent=w.state==='sent';
+ const I=(k,l,ph,ex)=>`<label for="${w.id}${k}">${l}</label><input id="${w.id}${k}" data-act="nf" data-f="${k}" value="${esc(f[k])}" placeholder="${esc(ph||'')}" autocomplete="off"${ex||''}${sent?' disabled':''}>`;
+ const foot=sent?'<p class="wst">Revise o cartão abaixo e confirme. <button class="btn sm ghost" type="button" data-act="nedit">Editar de novo</button></p>':'<div class="wa"><button class="btn" type="button" data-act="nrev">Revisar</button><button class="btn ghost" type="button" data-act="nx">Cancelar</button></div>';
+ return `<div class="wnp"><b class="wt">Novo produto · ${esc(AREAS[ST.area].n)}</b>
+ ${I('name','Nome','Ex.: Vestido midi floral')}
+ <div class="g2"><div>${I('price','Preço (R$)','Ex.: 129,90',' inputmode="decimal"')}</div>${imp?`<div>${I('optname','Nome da opção','Ex.: Sabor')}</div>`:`<div><label for="${w.id}gen">Público</label><select id="${w.id}gen" data-act="nf" data-f="gen"${sent?' disabled':''}>${['Feminino','Masculino','Unissex'].map(x=>`<option${f.gen===x?' selected':''}>${x}</option>`).join('')}</select></div>`}</div>
+ <div class="g2"><div>${I('kind','Tipo','Ex.: Vestido')}</div><div>${I(imp?'brand':'coll',imp?'Marca':'Coleção',imp?'Ex.: Nike':'Ex.: Verão 26')}</div></div>
+ ${imp?'':`<div class="g2"><div>${I('color','Cores','Ex.: Preto, Azul')}</div><div>${I('brand','Marca','Opcional')}</div></div>`}
+ <label for="${w.id}desc">Descrição</label><textarea id="${w.id}desc" data-act="nf" data-f="desc" rows="3" placeholder="Opcional"${sent?' disabled':''}>${esc(f.desc)}</textarea>
+ <label>${imp?'Opções':'Tamanhos'} e quantidade em estoque</label>
+ ${L.length?`<div class="chips f">${L.map(x=>`<button type="button" data-act="nopt" data-v="${esc(x)}"${on(x)?' class="on"':''}${sent?' disabled':''}>${esc(x)}</button>`).join('')}</div>`:''}
+ <div class="add"><input data-act="nonew" placeholder="${L.length?'Outra opção':'Digite uma opção'} (Enter para adicionar)" value="${esc(w.nn)}" aria-label="Adicionar opção" autocomplete="off"${sent?' disabled':''}><button class="btn sm ghost" type="button" data-act="nadd"${sent?' disabled':''}>Adicionar</button></div>
+ <div class="nrows">${nRows(w)}</div>
+ <p class="wst">${w.opts.length?'':'Sem marcar nada, o produto fica como "Único" com estoque 0.'}</p>
+ <label class="saleo"><input type="checkbox" data-act="nsale"${w.sale?' checked':''}${sent?' disabled':''}><span>Disponível para compra</span></label>
+ <p class="wst">Desligado, a loja mostra o produto só para visualização.</p>${foot}</div>`;
+}
+function reviewNew(i,w){
+ const f=w.f,price=num(f.price);
+ if(!String(f.name).trim())return toast('Informe o nome do produto.');
+ if(!(price>=0))return toast('Informe o preço.');
+ const input={name:f.name.trim(),price,kind:f.kind,color:f.color,brand:f.brand,desc:f.desc,sizes:w.opts.map(o=>({size:o.s,qty:o.q})),photo_ids:ST.pending.slice(),sale:w.sale};
+ if(core.imp()){if(f.optname)input.option_name=f.optname}else{input.gen=f.gen;input.coll=f.coll}
+ const r=confirmCard('create_product',input);
+ if(!r.ok)return toast(r.error);
+ w.state='sent';rerender(i);
+}
 function newChat(){startChat()}
 function chooseArea(m,v){
  if(!AREAS[v])return;
@@ -297,13 +350,18 @@ async function addPhotos(files){
 async function pickWidget(kind,opt){
  opt=opt||{};
  if(Date.now()-ST.lastLoad>20000)try{await reload()}catch(e){}   /* produtos novos aparecem sempre */
- const prompt={stock:'Qual produto você quer ajustar?',disc:'Em qual produto vamos simular o desconto?',photo:'Em qual produto coloco essas fotos? (Produto novo? Me escreva o nome, preço e tamanhos.)',list:'Todos os produtos do setor. Toque em um para ajustar o estoque.'}[kind];
+ const prompt={stock:'Qual produto você quer ajustar?',disc:'Em qual produto vamos simular o desconto?',photo:'Em qual produto coloco essas fotos? (É um produto novo? Toque no botão abaixo.)',sale:'Em qual produto você quer ligar ou desligar a compra? (Desligado, a loja só mostra o produto.)',list:'Todos os produtos do setor. Toque em um para ajustar o estoque.'}[kind];
  add('m','',{type:'pick',kind,q:'',f:opt.f||'all',ids:opt.ids||null,prompt});
 }
 function pickProduct(i,m,pid){
  const w=m.w,p=core.myProd(pid);if(!p)return toast('Não encontrei esse produto.');
  if(w.kind==='stock'||w.kind==='list'){m.w={type:'sheet',pid:String(p.id),draft:{},state:'edit'};return rerender(i)}
  if(w.kind==='disc'){m.w={type:'calc',id:'c'+(++ST.uid),pid:String(p.id),pct:'10',np:(+p.price*0.9).toFixed(2).replace('.',','),cost:''};return rerender(i)}
+ if(w.kind==='sale'){
+  const r=confirmCard('update_product',{product_id:String(p.id),sale:p.sale===false});
+  if(!r.ok)return toast(r.error);
+  w.closed=true;ST.msgs.splice(i,1);paint(true);return;
+ }
  if(w.kind==='photo'){
   if(!ST.pending.length)return toast('Escolha as fotos primeiro (clipe).');
   const r=confirmCard('manage_photos',{product_id:String(p.id),action:'add',photo_ids:ST.pending.slice()});
@@ -320,6 +378,8 @@ function onChip(e){
  const b=e.target.closest('[data-chip]');if(!b||ST.busy)return;const k=b.dataset.chip;
  if(k==='stock'||k==='disc')return pickWidget(k);
  if(k==='list')return pickWidget('list');
+ if(k==='new'){add('u','Novo produto');return newProductWidget()}
+ if(k==='sale'){add('u','Ativar ou desativar compra');return pickWidget('sale')}
  if(k==='photo')return $('#file').click();
  if(k==='rep'){add('u','Resumo da semana');return add('m',core.reportText(7))}
  if(k==='idea'){add('u','Sugestões');return showSugg()}
@@ -343,7 +403,7 @@ function calcText(t){
  }
  return null;
 }
-const STOP=new Set(['de','da','do','das','dos','um','uma','no','na','em','para','pra','que','com','por','tem','tenho','quanto','quantos','estoque','desconto','entrou','entraram','chegou','chegaram','tirei','saiu','repor','vendi']);
+const STOP=new Set(['desativar','desative','ativar','ative','pausar','compra','venda','liberar','libere','habilitar','desabilitar','bloquear','visualizacao','somente','apenas','so','novo','nova','criar','cadastrar','produto','de','da','do','das','dos','um','uma','no','na','em','para','pra','que','com','por','tem','tenho','quanto','quantos','estoque','desconto','entrou','entraram','chegou','chegaram','tirei','saiu','repor','vendi']);
 function matchProd(t){
  const toks=norm(t).split(/[^a-z0-9]+/).filter(x=>x.length>1&&!STOP.has(x)&&!/^\d+$/.test(x));
  let best=[],bs=0;
@@ -352,12 +412,27 @@ function matchProd(t){
 }
 async function brain(t,ph){
  const n=norm(t);
+ if(/\b(novo|nova|criar|crie|cadastr\w*)\b.*\bproduto\b|\bproduto novo\b/.test(n)){
+  if(ph.length)ST.pending=ph.slice();
+  const rest=t.replace(/^.*?\bproduto\b\s*[:\-–]?\s*/i,'').trim(),pm=rest.match(/(?:R\$\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:reais)?$/i),pre={};
+  if(rest){pre.name=(pm?rest.slice(0,pm.index):rest).replace(/\s+(de|por|a|custa|preco|preço)\s*$/i,'').trim();if(pm)pre.price=pm[1]}
+  return newProductWidget(pre);
+ }
  if(ph.length){
   const L=matchProd(t);
   if(L.length===1){const r=confirmCard('manage_photos',{product_id:String(L[0].id),action:'add',photo_ids:ph});if(r.ok)return;add('m',r.error)}
   ST.pending=ph.slice();paint(true);return pickWidget('photo');
  }
  const L=matchProd(t);
+ const OFF=/\b(desativ\w*|desabilit\w*|pausar|pause|bloquear|bloqueie)\b|so visualiz|somente visualiz|apenas visualiz|nao vender|tirar (da|de) venda/,ON=/\b(ativar|ative|habilit\w*|liberar|libere|reativ\w*)\b/;
+ if((OFF.test(n)||ON.test(n))&&/compra|venda|vender|visualiz|produto/.test(n)){
+  const off=OFF.test(n);
+  if(L.length===1){const p=L[0],isOn=p.sale!==false;
+   if(off===!isOn)return add('m','*'+p.name+'* já está '+(off?'só para visualização.':'liberado para compra.'));
+   const r=confirmCard('update_product',{product_id:String(p.id),sale:!off});return r.ok?undefined:add('m',r.error)}
+  if(L.length>1)add('m','Achei mais de um produto parecido. Qual deles?');
+  return pickWidget('sale',{ids:L.length?L.map(p=>String(p.id)):null});
+ }
  /* movimentação de estoque em frase: "entraram 5 vestido azul M" */
  const mode=/\b(entrou|entraram|chegou|chegaram|repor|repus|adicion\w*|acrescent\w*)\b/.test(n)?'entrada':/\b(tirei|tiramos|saiu|sairam|retir\w*|baix\w*|vendi|vendemos)\b/.test(n)?'saida':'';
  if(mode&&L.length){
@@ -386,7 +461,7 @@ async function brain(t,ph){
  if(/estoque|entrada|baixa|chegou|entrou/.test(n))return pickWidget('stock');
  if(/desconto|promo|preco/.test(n))return pickWidget('disc');
  if(/foto|imagem/.test(n))return $('#file').click();
- add('m','Não entendi essa. Eu sei:\n• *contas*: "200 com 15% de desconto", "3x de 49,90"\n• *estoque*: "entraram 5 [produto] [tamanho]", "tirei 2 [produto]"\n• *sugestões*, *produtos*, *sem estoque*, *resumo*\n• *desconto*: "15% de desconto em [produto]"');
+ add('m','Não entendi essa. Eu sei:\n• *contas*: "200 com 15% de desconto", "3x de 49,90"\n• *estoque*: "entraram 5 [produto] [tamanho]", "tirei 2 [produto]"\n• *sugestões*, *produtos*, *sem estoque*, *resumo*\n• *novo produto* (ou "novo produto Vestido azul 129,90")\n• *desativar compra de [produto]* ou *ativar compra de [produto]*\n• *desconto*: "15% de desconto em [produto]"');
 }
 function send(){sendText($('#ta').value)}
 function sendText(raw){

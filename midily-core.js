@@ -75,7 +75,7 @@ function create(o){
  /* ---------- visões ---------- */
  function view(p){
   const sizes={};szOf(p).forEach(s=>{sizes[s]=stkQ(p,s)});
-  return{id:String(p.id),nome:p.name,preco:+p.price,preco_antigo:+p.oldPrice>0?+p.oldPrice:undefined,faixa:p.tag||undefined,estoque_total:+p.stock||0,por_tamanho:sizes,fotos:pimgs(p).length,tipo:p.kind||undefined,publico:p.gen||undefined,cor:p.color||undefined,marca:p.brand||undefined,sem_divisao_de_estoque:canStk(p)?undefined:true};
+  return{id:String(p.id),nome:p.name,preco:+p.price,preco_antigo:+p.oldPrice>0?+p.oldPrice:undefined,faixa:p.tag||undefined,estoque_total:+p.stock||0,por_tamanho:sizes,fotos:pimgs(p).length,tipo:p.kind||undefined,publico:p.gen||undefined,cor:p.color||undefined,marca:p.brand||undefined,sem_divisao_de_estoque:canStk(p)?undefined:true,compra:p.sale===false?'desligada (só visualização)':undefined};
  }
  function find(q,onlyLow,limit){
   limit=Math.min(25,Math.max(1,Math.floor(+limit)||12));
@@ -191,12 +191,14 @@ function create(o){
   const gen=imp()?'':(GENS.includes(a.gen)?a.gen:'Unissex'),tot=list.reduce((t,x)=>t+x.qty,0);
   const lines=['*'+name+'* · '+money(price),'Estoque inicial: '+list.map(x=>(list.length>1?x.size+': ':'')+x.qty).join(' · ')+' (total '+tot+')'];
   if(gen)lines.push('Público: '+gen);if(a.kind)lines.push('Tipo: '+a.kind);if(a.coll&&!imp())lines.push('Coleção: '+a.coll);
+  if(a.sale===false)lines.push('Compra desligada: aparece na loja só para visualização');
   lines.push(imgs.length?imgs.length+' foto(s) (a primeira é a capa)':'Sem fotos por enquanto');
   return{ok:true,lines,photos:ids,apply(){
    let id=Date.now();while(byId(id))id++;
    const stk={};list.forEach(x=>{stk[x.size]=x.qty});
-   const p={id,type:imp()?'avulso':'roupa',coll:imp()?'':String(a.coll||'').trim(),sizes:list.map(x=>x.size).join(','),color:String(a.color||'').trim(),brand:String(a.brand||'').trim(),desc:String(a.desc||'').trim(),specs:'',name,price:r2(price),gen,stk,stock:sumOf(stk),imgs:imgs.slice(),img:imgs[0]||''};
+   const p={id,type:imp()?'avulso':'roupa',coll:imp()?'':String(a.coll||'').trim(),sizes:list.map(x=>x.size).join(','),color:String(a.color||'').trim(),brand:String(a.brand||'').trim(),desc:String(a.desc||'').trim(),specs:String(a.specs||'').trim(),sale:a.sale!==false,name,price:r2(price),gen,stk,stock:sumOf(stk),imgs:imgs.slice(),img:imgs[0]||''};
    if(a.kind)p.kind=String(a.kind).trim();
+   if(imp()&&a.option_name)p.optionName=String(a.option_name).trim();
    S.products=S.products||[];S.products.push(p);
    if(p.coll){S.colls=S.colls||[];if(!S.colls.includes(p.coll))S.colls.push(p.coll)}
    list.forEach(x=>{if(x.qty>0)move(p,x.size,'entrada',x.qty,'Cadastro inicial (Midily)')});
@@ -225,6 +227,7 @@ function create(o){
   }
   ['desc','color','brand','kind','coll'].forEach(k=>{if(has(k)){const v=String(a[k]).trim();if(v!==String(p[k]||'')){patch[k]=v;lines.push({desc:'Descrição',color:'Cor',brand:'Marca',kind:'Tipo',coll:'Coleção'}[k]+': *'+(v||'vazio')+'*')}}});
   if(has('gen')&&!imp()){if(!GENS.includes(a.gen))return err('Público inválido.');if(a.gen!==p.gen){patch.gen=a.gen;lines.push('Público: '+(p.gen||'—')+' → *'+a.gen+'*')}}
+  if(has('sale')){const want=a.sale===true||a.sale==='true',cur=p.sale!==false;if(want!==cur){patch.sale=want;lines.push('Compra: '+(cur?'ativa':'só visualização')+' → *'+(want?'ativa':'só visualização')+'*');if(!want)lines.push('O produto continua aparecendo na loja, mas ninguém consegue comprar.')}}
   if(!lines.length)return err('Nada muda: o produto já está assim.');
   return{ok:true,title:'Alterar '+p.name,lines,apply(){
    Object.assign(p,patch);
